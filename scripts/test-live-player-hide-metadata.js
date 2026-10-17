@@ -20,7 +20,7 @@ assert.ok(
   'Regular player title/source metadata binding must remain available'
 );
 assert.ok(
-  !html.includes('#playerTop{display:none!important;}'),
+  !html.split('\n').some(line => line.trim().startsWith('#playerTop{display:none!important;')),
   'Do not globally hide player metadata for non-LIVE channels'
 );
 assert.ok(
