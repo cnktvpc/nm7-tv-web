@@ -26,6 +26,8 @@ jobs:
 
       - name: Check JavaScript syntax
         run: node --check web-tv/app.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --input-type=module --check < worker.js
 
       - name: Verify LIVE-only metadata hiding
         run: node scripts/test-live-player-hide-metadata.js
