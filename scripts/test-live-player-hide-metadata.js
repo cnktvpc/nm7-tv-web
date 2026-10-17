@@ -5,12 +5,14 @@ const assert = require('node:assert/strict');
 
 const app = fs.readFileSync('web-tv/app.js', 'utf8');
 const activeApp = fs.readFileSync('web-tv/app-safari-policy-mobile-controls.js', 'utf8');
+const pcApp = fs.readFileSync('web-tv/app-safari-policy-pc-controls.js', 'utf8');
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
 const worker = fs.readFileSync('worker.js', 'utf8');
 
-const liveClassMarker = "S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';";
+const liveClassMarker = "S.zone='player';$('player').className=(S.livePlaybackContext||S.liveSectionActive)?'live-playback':'';";
 assert.ok(app.includes(liveClassMarker), 'app.js source must mark LIVE playback');
-assert.ok(activeApp.includes(liveClassMarker), 'active browser runtime must mark LIVE playback');
+assert.ok(activeApp.includes(liveClassMarker), 'active mobile browser runtime must mark LIVE playback');
+assert.ok(pcApp.includes(liveClassMarker), 'PC browser runtime must mark LIVE playback');
 
 assert.ok(
   html.includes('#player.live-playback #playerTop{display:none!important;}'),
@@ -26,10 +28,12 @@ assert.ok(
 );
 assert.ok(worker.includes('LIVE_PLAYER_OVERLAY_CSS'), 'Worker must retain an HTML overlay fallback for the existing production assets');
 assert.ok(worker.includes('LIVE_PLAYER_INIT_RE'), 'Worker must patch the active LIVE player runtime when old assets are served');
+assert.ok(worker.includes('LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL'), 'Worker must cache-bust the PC player runtime too');
+assert.ok(worker.includes('(S.livePlaybackContext||S.liveSectionActive)'), 'Worker must fall back to the active LIVE section state for older event integrations');
 assert.ok(worker.includes('liveOverlayHtmlResponse(new Response(page.body'), 'Worker must transform the home HTML response');
-assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'"), 'Worker must transform the active player runtime asset');
+assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js'"), 'Worker must transform both PC and mobile player runtime assets');
 assert.ok(
-  html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1'),
+  html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay2'),
   'index.html must use a new cache-buster for the active runtime script'
 );
 
