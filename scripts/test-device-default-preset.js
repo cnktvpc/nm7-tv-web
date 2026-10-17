@@ -109,6 +109,6 @@ for (const file of appFiles) {
 }
 
 const indexHtml = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(indexHtml.includes('app-safari-policy-pc-controls.js?v=20261013-pc-click-autohide-player-controls3'), 'index.html must bump the active app script cache-buster');
+assert.ok(indexHtml.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1'), 'index.html must use the active mobile-controls runtime cache-buster');
 
 console.log('DEVICE_DEFAULT_TV_PRESET_TESTS_OK');
