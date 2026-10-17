@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const app = fs.readFileSync('web-tv/app.js', 'utf8');
 const activeApp = fs.readFileSync('web-tv/app-safari-policy-mobile-controls.js', 'utf8');
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
+const worker = fs.readFileSync('worker.js', 'utf8');
 
 const liveClassMarker = "S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';";
 assert.ok(app.includes(liveClassMarker), 'app.js source must mark LIVE playback');
@@ -23,6 +24,10 @@ assert.ok(
   !html.split('\n').some(line => line.trim().startsWith('#playerTop{display:none!important;')),
   'Do not globally hide player metadata for non-LIVE channels'
 );
+assert.ok(worker.includes('LIVE_PLAYER_OVERLAY_CSS'), 'Worker must retain an HTML overlay fallback for the existing production assets');
+assert.ok(worker.includes('LIVE_PLAYER_INIT_RE'), 'Worker must patch the active LIVE player runtime when old assets are served');
+assert.ok(worker.includes('liveOverlayHtmlResponse(new Response(page.body'), 'Worker must transform the home HTML response');
+assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'"), 'Worker must transform the active player runtime asset');
 assert.ok(
   html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1'),
   'index.html must use a new cache-buster for the active runtime script'
