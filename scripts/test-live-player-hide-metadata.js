@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
 const app = fs.readFileSync('web-tv/app.js', 'utf8');
+const activeApp = fs.readFileSync('web-tv/app-safari-policy-mobile-controls.js', 'utf8');
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
 
 // LIVE playback must mark the player so its embedded title/source panel can be hidden.
