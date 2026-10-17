@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <!-- NM7 home-title cleanup release 2026-10-11; keep the channel-list heading empty on mobile. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07111F">
+<meta name="application-name" content="NM7 TV 1.0.69">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>NM7 TV 1.0.69</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-serif}
+body{user-select:none;-webkit-user-select:none}
+button,input{font:inherit}
+button{cursor:pointer}
+#app{position:relative;width:100%;height:100%;background:#07111f url("/assets/nm7-default-background.webp?v=1.0.69-4k") center center/100% 100% no-repeat;overflow:hidden}#app::after{content:"";position:absolute;inset:0;background:rgba(7,17,31,.141176);pointer-events:none;z-index:0}#home,#player,#side,#dlg,#toast,#debug{z-index:1}
+#home{position:absolute;inset:0;padding:0 18px 0 72px;overflow:hidden;background:transparent;scrollbar-width:none;display:flex;flex-direction:column}
+#homeTabs{display:none;position:relative;flex:0 0 64px;height:64px;align-items:center;padding:6px 0;z-index:4}
+/* Desktop browsers use a pointer, not the mobile coarse-pointer media query. Keep the three primary sections visible on PC. */
+@media screen and (min-width:1025px) and (pointer:fine){#homeTabs{display:flex;flex:0 0 64px;height:64px;gap:4px;padding:6px 0}#homeTabs #homeTitle{display:none}}
+#homeTitle{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c8d2dd;font-size:18px;font-weight:700;pointer-events:none}
+#btnNewsTab{height:52px;margin-left:4px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:#fff;outline:none;font-size:16px;font-weight:700;white-space:nowrap}#btnNewsTab:focus{outline:3px solid #37d6a6;background:#ffffff18}#btnYouTubeTab{width:180px;height:52px;border:0;border-radius:10px;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;outline:none;font-size:17px;font-weight:700}
+#btnYouTubeTab:focus,#appShortcut:focus{outline:3px solid #37d6a6;background:#ffffff18}
+
+#btnLiveTab{height:52px;margin-left:3px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;outline:none;font-size:16px;font-weight:700;white-space:nowrap}
+#btnLiveTab:focus{outline:3px solid #37d6a6;background:#ffffff18}
+#liveView{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 4px 8px;gap:6px}
+#liveHeader{flex:0 0 auto;display:flex;align-items:center;gap:12px;min-height:50px;padding:4px 6px 2px}
+#liveHeader h1{font-size:22px;line-height:1.2;margin:0;font-weight:800;white-space:nowrap}
+#liveStatus{flex:1 1 auto;min-width:0;color:#c3d1df;font-size:14px;line-height:1.35;overflow:hidden;text-overflow:ellipsis}
+#liveRefresh{flex:0 0 auto;border:1px solid #ffffff30;border-radius:9px;background:#172838;color:#fff;padding:9px 13px;font-size:15px;font-weight:700}
+#liveRefresh:focus{outline:3px solid #37d6a6}
+#liveEvents{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;overscroll-behavior:contain;display:flex;flex-direction:column;gap:6px;padding:4px 8px 20px}
+.live-row{flex:0 0 auto;min-height:72px;display:grid;grid-template-columns:58px minmax(0,1fr) auto;align-items:center;gap:12px;padding:8px 12px;background:rgba(8,18,30,.82);border:1px solid rgba(255,255,255,.13);border-radius:12px;color:#fff}
+.live-logo{width:48px;height:48px;border-radius:9px;background:#142536;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:11px;font-weight:800;color:#37d6a6}
+.live-logo img{width:100%;height:100%;object-fit:contain}
+.live-info{min-width:0;display:flex;flex-direction:column;gap:3px}
+.live-event-title{font-size:17px;font-weight:800;line-height:1.25;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.live-subtitle{font-size:12px;color:#37d6a6;line-height:1.25}
+.live-detail{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px;line-height:1.25;color:#b7c4d2}
+.live-selected-server{opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:36vw}
+.live-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px}
+.live-action{border:1px solid #ffffff28;border-radius:8px;background:#182736;color:#fff;padding:9px 12px;min-height:38px;font-size:13px;font-weight:700;white-space:nowrap;outline:none}
+.live-action:focus{outline:3px solid #37d6a6;background:#203e4d}
+.live-play{background:#0d8068;border-color:#37d6a6}
+.live-fav[aria-pressed="true"]{color:#ff9fb0}
+.live-empty{padding:24px 16px;color:#d5dde7;font-size:15px;background:#07111fb5;border-radius:10px}
+#liveDialog{position:absolute;z-index:115;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(0,0,0,.74)}
+.live-dialog-shade{width:100%;display:flex;align-items:center;justify-content:center}
+.live-dialog-panel{width:min(860px,94%);max-height:82%;overflow:auto;background:#141d28;border:1px solid #ffffff25;border-radius:16px;padding:24px;box-shadow:0 25px 70px #000}
+.live-dialog-panel h2{font-size:22px;margin:0 0 8px}
+.live-dialog-panel p{margin:0 0 15px;color:#c2cfdd;font-size:14px}
+.live-dialog-options{display:flex;flex-direction:column;gap:8px}
+.live-dialog-choice,.live-dialog-cancel{border:1px solid #ffffff28;border-radius:9px;background:#202d3b;color:#fff;text-align:left;min-height:44px;padding:10px 13px;font-size:14px;overflow-wrap:anywhere}
+.live-dialog-choice[aria-pressed="true"]{border-color:#37d6a6;background:#173e39}
+.live-dialog-choice:focus,.live-dialog-cancel:focus{outline:3px solid #37d6a6}
+.live-dialog-footer{display:flex;justify-content:flex-end;margin-top:15px}
+@media screen and (max-width:1024px) and (pointer:coarse){
+ #btnLiveTab{width:auto;min-width:58px;height:46px;padding:0 6px;font-size:13px;gap:3px}
+ #liveView{padding:1px 0 calc(8px + env(safe-area-inset-bottom,0px));gap:3px}
+ #liveHeader{min-height:43px;padding:2px 3px;gap:7px}
+ #liveHeader h1{font-size:17px}
+ #liveStatus{font-size:11px;max-height:30px}
+ #liveRefresh{padding:7px 9px;font-size:12px;border-radius:8px}
+ #liveEvents{gap:6px;padding:3px 2px 16px}
+ .live-row{grid-template-columns:38px minmax(0,1fr);gap:8px;padding:8px;min-height:0;border-radius:11px}
+ .live-logo{width:36px;height:36px;border-radius:7px;font-size:9px}
+ .live-info{gap:2px}
+ .live-event-title{font-size:13px;line-height:1.25;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+ .live-subtitle{font-size:10px}
+ .live-detail{gap:6px;font-size:10px}
+ .live-selected-server{max-width:45vw}
+ .live-actions{grid-column:2;display:flex;gap:5px;justify-content:stretch;margin-top:2px}
+ .live-action{flex:1 1 0;min-width:0;min-height:34px;padding:6px 5px;font-size:11px;border-radius:8px}
+ .live-empty{font-size:13px;padding:18px 10px}
+ #liveDialog{padding:8px}
+ .live-dialog-panel{width:100%;max-height:88%;padding:17px;border-radius:13px}
+ .live-dialog-panel h2{font-size:18px}
+ .live-dialog-panel p{font-size:12px}
+ .live-dialog-choice,.live-dialog-cancel{font-size:12px;min-height:42px;padding:9px}
+}
+@media screen and (max-width:600px) and (pointer:coarse){
+ #btnLiveTab{min-width:54px;font-size:12px;padding:0 4px}
+ #liveHeader h1{font-size:15px}
+ #liveStatus{font-size:10px}
+ .live-detail{align-items:flex-start;flex-direction:column;gap:3px}
+ .live-selected-server{max-width:75vw}
+ .live-action{font-size:10px;padding:6px 3px}
+}
+
+.youtubeMark{width:32px;height:22px;border-radius:6px;background:#ff0000;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:12px;line-height:1}
+#appShortcut{width:84px;height:52px;margin-left:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;outline:none}
+#shortcutIcon{width:30px;height:30px;object-fit:contain}
+#shortcutLabel{font-size:10px;color:#f5f8fc;line-height:14px;white-space:nowrap;max-width:84px;overflow:hidden;text-overflow:ellipsis}
+#homeRows{flex:1 1 auto;min-height:0;overflow-y:scroll;overflow-x:hidden;scrollbar-width:none;-webkit-overflow-scrolling:auto;overscroll-behavior-y:contain;scroll-behavior:auto;padding-bottom:30px}
+#homeRows::-webkit-scrollbar{display:none}
+#home::-webkit-scrollbar,.cards::-webkit-scrollbar,.quickCards::-webkit-scrollbar{display:none}
+.row{margin:0}
+.row h2{margin:0;height:49px;padding:8px 2px 5px;font-size:18px;line-height:21px;font-weight:700;text-shadow:0 2px 4px #000a}
+.cards{display:flex;gap:12px;width:100%;min-width:0;height:84px;overflow-x:auto;overflow-y:hidden;padding:0 18px 0 0;scroll-behavior:auto;scrollbar-width:none;overscroll-behavior:contain;scroll-snap-type:none}
+.card{position:relative;appearance:none;-webkit-appearance:none;flex:0 0 128px;width:128px;height:70px;margin:0;box-sizing:border-box;border:0;border-radius:0;background:transparent;padding:0;outline:none;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .12s ease;z-index:1;color:#fff;text-align:center;overflow:visible}
+.card:focus{border:0;background:transparent;transform:scale(1.12);z-index:5;box-shadow:none}
+body.tv-spatial .card:focus{border-radius:14px;background:#ffffff12;box-shadow:0 0 0 3px #37d6a6 inset,0 0 18px #37d6a666;transform:scale(1.04)}
+body.tv-spatial,body.tv-spatial *{cursor:none!important}
+body.tv-spatial button:focus-visible,body.tv-spatial .card:focus{outline:none}
+body.tv-pointer-locked,body.tv-pointer-locked *{cursor:none!important} 
+body.tv-spatial #homeRows{overscroll-behavior:contain}
+.thumb{position:relative;width:100%;height:52px;flex:0 0 52px;border-radius:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:visible;z-index:1}
+.thumb::before{content:"";position:absolute;left:50%;top:26px;width:60px;height:60px;margin:-30px 0 0 -30px;border-radius:50%;background:rgba(64,169,255,.33);border:5px solid #2f9bff;opacity:0;pointer-events:none;z-index:0}
+.thumb::after{content:"";position:absolute;left:50%;top:26px;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;border:2px solid #fff;opacity:0;pointer-events:none;z-index:3}
+.card:focus .thumb::before,.card:focus .thumb::after{opacity:1}
+.thumb img{position:relative;z-index:1;display:block;width:48px;height:48px;max-width:48px;max-height:48px;object-fit:contain;border-radius:50%}
+.thumb img.noClip{border-radius:0}
+.thumb span{color:#37d6a6;font-size:18px;font-weight:700}
+.name{position:relative;text-align:center;font-size:11px;line-height:18px;height:18px;max-width:128px;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0;color:#f5f8fc;z-index:2}
+.card:focus .name{font-weight:700}
+.star{position:absolute;top:0;right:10px;font-size:17px;z-index:4}
+.empty{padding:80px 5px;font-size:28px;color:#abb2bc}
+.hidden{display:none!important}
+#player{position:absolute;z-index:60;inset:0;background:#000}
+
+#video{width:100%;height:100%;background:#000;object-fit:contain}
+#status{position:absolute;z-index:3;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#c5cad1;font-size:26px;padding:70px;pointer-events:none;white-space:pre-wrap;text-shadow:0 2px 8px #000}
+#officialBtn{position:absolute;z-index:6;left:50%;top:62%;transform:translate(-50%,-50%);font-size:20px;padding:13px 22px}
+#playerTop{position:absolute;left:0;right:0;top:0;z-index:4;padding:22px 32px;background:linear-gradient(#000d,transparent);pointer-events:none}
+#playerTitle{font-size:25px;font-weight:700}
+#playerMeta{font-size:15px;color:#9ea8b5;margin-top:5px;word-break:break-all}
+#ctrl{position:absolute;z-index:25;left:50%;bottom:44px;transform:translateX(-50%);background:#10141aed;padding:12px 14px;border-radius:12px;display:flex;gap:9px;white-space:nowrap;pointer-events:auto;isolation:isolate}
+.cb{position:relative;z-index:26;border:0;border-radius:8px;background:#303742;color:#fff;padding:11px 17px;font-size:18px;outline:none;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:rgba(55,214,166,.25)}
+.cb:focus{outline:3px solid #fff;background:#fff;color:#000}
+#side{position:absolute;z-index:80;left:0;top:0;bottom:0;width:310px;background:#090c10fa;padding:18px 14px 26px;box-shadow:20px 0 60px #000}
+#sideHeader{height:64px;display:flex;align-items:center;margin-bottom:8px}
+#sideHeader img{width:54px;height:54px;object-fit:contain;flex:none}
+#sideHeader span{font-size:19px;font-weight:700;margin-left:10px}
+#sideList{height:calc(100% - 106px);overflow-y:auto;scrollbar-width:none}
+#sideList::-webkit-scrollbar{display:none}
+.menuBtn{width:100%;height:48px;padding:10px 16px;margin:4px 0;border:0;border-radius:9px;background:transparent;color:#fff;text-align:left;font-size:18px;cursor:pointer;outline:none}
+.menuBtn:focus{background:#fff;color:#000}
+#sideHint{position:absolute;left:24px;bottom:18px;color:#949eab;font-size:14px}
+#dlg{position:absolute;z-index:100;inset:0;background:#000b;display:flex;align-items:center;justify-content:center}
+#box{width:860px;max-width:90vw;max-height:80vh;overflow:auto;background:#171c23;border-radius:14px;padding:26px;box-shadow:0 25px 80px #000}
+#box h2{margin:0 0 17px;font-size:28px}
+.input{width:100%;background:#07090d;color:#fff;border:2px solid #4e5662;border-radius:8px;padding:12px;font-size:21px;outline:none}
+.input:focus{border-color:#fff}
+.guide{color:#acb5c0;line-height:1.5;font-size:17px}
+.dialogActions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.db{border:0;border-radius:8px;background:#303741;color:#fff;padding:11px 17px;font-size:18px;outline:none}
+.db:focus{outline:3px solid #fff;background:#fff;color:#000}
+#toast{position:absolute;z-index:120;left:50%;bottom:38px;transform:translateX(-50%);background:#121821f2;border-radius:9px;padding:11px 19px;font-size:18px;opacity:0;pointer-events:none;max-width:90vw;text-align:center;transition:opacity .15s}
+#toast.show{opacity:1}
+#quick{position:absolute;z-index:70;left:0;right:0;bottom:0;background:linear-gradient(transparent,#040608 28%);padding:72px 22px 28px}
+#quickTitle{font-size:18px;font-weight:700;margin-bottom:7px;text-shadow:0 2px 5px #000}
+.quickCards{display:flex;gap:6px;overflow-x:auto;min-height:84px;padding:2px 8px 3px 2px;scrollbar-width:none}
+.quickCard{flex:0 0 142px;height:78px;border-radius:20px;border:2px solid transparent;background:#131a22d9;color:#fff;outline:none;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;font-size:13px}
+.quickCard:focus{border-color:#37d6a6;background:#263238;transform:scale(1.05)}
+#debug{position:absolute;z-index:130;left:8px;top:8px;max-width:60vw;color:#ffedb3;background:#18140be8;border:1px solid #6b5c32;border-radius:6px;padding:6px 9px;font:12px/1.35 monospace;white-space:pre-wrap;display:none;pointer-events:none}
+@media (max-height:650px){
+  #home{padding-bottom:14px}
+  #box{padding:20px}
+  #playerTop{padding:15px 24px}
+  #playerTitle{font-size:21px}
+  #status{font-size:22px}
+}
+
+/* Mobile responsive layer: TV styles above remain the default. */
+#mobileMenuBtn{display:none;border:0;background:transparent;color:#fff;width:48px;height:48px;border-radius:12px;font-size:27px;line-height:1;outline:none}
+#mobileMenuBtn:focus{outline:2px solid #37d6a6;background:#ffffff18}
+
+@media screen and (max-width:1024px) and (pointer:coarse){
+  html,body{width:100%;height:100%;min-height:100%;overflow:hidden}
+  body{background:#07111f}
+  #app{width:100%;height:100dvh;min-height:100%;background-position:center center;background-size:cover;padding:0}
+  #home{inset:0;padding:0 calc(10px + env(safe-area-inset-left,0px)) 0 calc(10px + env(safe-area-inset-right,0px));}
+  #homeTabs{display:flex;flex:0 0 calc(58px + env(safe-area-inset-top,0px));height:calc(58px + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 4px 0;align-items:center;gap:4px;position:relative}
+  #mobileMenuBtn{display:flex;align-items:center;justify-content:center;flex:0 0 46px}
+  #btnYouTubeTab{width:auto;min-width:92px;height:46px;padding:0 10px;font-size:14px;gap:6px}
+  .youtubeMark{width:28px;height:19px;font-size:11px}
+  #appShortcut{width:54px;height:46px;margin-left:0}
+  #shortcutIcon{width:25px;height:25px}
+  #shortcutLabel{display:none}
+  #homeTitle{font-size:16px;left:154px;right:58px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #homeRows{padding:4px 0 calc(22px + env(safe-area-inset-bottom,0px));overscroll-behavior-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+  .row{margin:0 0 8px}
+  .row h2{height:34px;padding:7px 5px 2px;font-size:16px;line-height:20px}
+  .cards{height:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:4px 2px 8px;overflow:visible;scrollbar-width:none;touch-action:pan-y}
+  .card{flex:0 0 auto;width:100%;height:82px;min-width:0;border-radius:14px;padding:4px;touch-action:manipulation}
+  .card:focus{transform:none;background:#ffffff0d;box-shadow:0 0 0 2px #37d6a6 inset;border-radius:14px}
+  .thumb{height:48px;flex-basis:48px}
+  .thumb::before{width:54px;height:54px;top:24px;margin:-27px 0 0 -27px;border-width:4px}
+  .thumb::after{width:48px;height:48px;top:24px;margin:-24px 0 0 -24px}
+  .thumb img{width:44px;height:44px;max-width:44px;max-height:44px}
+  .name{height:22px;line-height:20px;font-size:12px;max-width:100%;padding:0 2px}
+  .star{top:3px;right:5px;font-size:14px}
+  .empty{padding:50px 8px;font-size:20px;text-align:center}
+  #side{width:min(340px,88vw);padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:12px 0 40px #000}
+  #sideHeader{height:56px;margin-bottom:8px}
+  #sideHeader img{width:46px;height:46px}
+  #sideHeader span{font-size:17px}
+  #sideList{height:calc(100% - 98px)}
+  .menuBtn{height:48px;margin:3px 0;padding:10px 14px;font-size:16px;border-radius:10px}
+  #sideHint{display:none}
+  #playerTop{padding:calc(12px + env(safe-area-inset-top,0px)) 14px 10px;background:linear-gradient(#000d,transparent);padding-right:48px}
+  #playerTitle{font-size:17px;line-height:22px}
+  #playerMeta{display:none}
+  #status{font-size:16px;line-height:23px;padding:70px 22px}
+  #ctrl{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));transform:none;justify-content:flex-start;gap:6px;padding:8px;overflow-x:auto;max-width:none;border-radius:13px}
+  .cb{flex:0 0 auto;min-width:52px;min-height:44px;padding:9px 12px;font-size:14px;border-radius:9px;touch-action:manipulation}
+  #quick{padding:72px 10px calc(16px + env(safe-area-inset-bottom,0px))}
+  #quickTitle{font-size:15px;margin-left:4px}
+  .quickCards{gap:7px;min-height:72px;padding:3px 5px}
+  .quickCard{flex-basis:126px;height:66px;border-radius:14px;font-size:12px;touch-action:manipulation}
+  #box{width:min(92vw,520px);max-width:92vw;max-height:78dvh;border-radius:14px;padding:20px}
+  #box h2{font-size:22px;margin-bottom:12px}
+  .guide{font-size:15px}
+  .input{font-size:17px;padding:11px}
+  .dialogActions{flex-wrap:wrap;justify-content:stretch}
+  .db{flex:1 1 120px;min-height:46px;font-size:16px}
+  #toast{left:10px;right:10px;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:none;font-size:15px;padding:10px 14px;max-width:none}
+  #debug{max-width:92vw;font-size:10px}
+}
+
+body.mobile-mode #home,
+body.mobile-mode #player,
+body.mobile-mode #side,
+body.mobile-mode #dlg,
+body.mobile-mode #toast,
+body.mobile-mode #debug{font-synthesis:none}
+
+@media screen and (max-width:600px) and (pointer:coarse){
+  #homeTabs{flex-basis:calc(54px + env(safe-area-inset-top,0px));height:calc(54px + env(safe-area-inset-top,0px))}
+  #homeTitle{left:128px;right:48px;font-size:15px}
+  #btnYouTubeTab{min-width:70px;padding:0 6px;font-size:13px}
+  #appShortcut{width:45px}
+  .cards{height:auto}
+  .card{width:100%;min-width:0}
+  .row h2{font-size:15px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 8px}
+  #ctrl{gap:5px}
+  .cb{min-width:48px;padding:9px 10px;font-size:13px}
+}
+
+/* When a phone rotates to landscape, use the extra width instead of forcing the TV layout. */
+@media screen and (orientation:landscape) and (max-height:600px) and (pointer:coarse){
+  #homeTabs{flex-basis:50px;height:50px}
+  #homeRows{padding-top:0}
+  .cards{height:auto}
+  .card{height:74px}
+  .thumb{height:42px;flex-basis:42px}
+  .thumb::before{top:21px}
+  .thumb::after{top:21px}
+  .row h2{height:30px;padding-top:5px}
+  #ctrl{bottom:6px}
+  #status{font-size:15px}
+}
+
+
+
+/* NM7 mobile density/layout refinement — baseline 1.0.69 preserved. */
+#appShortcut{display:none!important}
+@media screen and (pointer:coarse){
+  /* Tablet landscape can exceed the max-width:1024px media query, but remains mobile-mode. */
+  body.mobile-mode #mobileMenuBtn{display:flex;align-items:center;justify-content:center;flex:0 0 46px}
+  body.mobile-mode #homeTabs{display:flex}
+  body.mobile-mode #appShortcut{display:none!important}
+  body.mobile-mode #homeTitle{left:144px;right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.mobile-mode #homeRows{padding-left:0;padding-right:0}
+  body.mobile-mode .row{margin:0 0 5px}
+  body.mobile-mode .row h2{height:31px;padding:5px 5px 1px;font-size:15px;line-height:20px}
+  body.mobile-mode .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 6px;height:auto;width:100%;padding:2px 3px 6px;overflow:visible}
+  body.mobile-mode .card{width:100%;height:76px;min-width:0;padding:2px;border-radius:11px}
+  body.mobile-mode .card:focus{transform:none;border-radius:11px;box-shadow:0 0 0 2px #37d6a6 inset}
+  body.mobile-mode .thumb{height:44px;flex-basis:44px}
+  body.mobile-mode .thumb::before{width:50px;height:50px;top:22px;margin:-25px 0 0 -25px;border-width:3px}
+  body.mobile-mode .thumb::after{width:45px;height:45px;top:22px;margin:-22px 0 0 -22px;border-width:2px}
+  body.mobile-mode .thumb img{width:40px;height:40px;max-width:40px;max-height:40px}
+  body.mobile-mode .name{height:20px;line-height:18px;font-size:11px;padding:0 1px}
+  body.mobile-mode .star{top:1px;right:4px;font-size:13px}
+}
+@media screen and (orientation:landscape) and (pointer:coarse){
+  body.mobile-mode #homeTabs{flex-basis:50px;height:50px;padding-top:0}
+  body.mobile-mode #homeTitle{left:148px;right:10px;font-size:15px}
+  body.mobile-mode #homeRows{padding-top:0}
+  body.mobile-mode .row{margin-bottom:3px}
+  body.mobile-mode .row h2{height:28px;padding:4px 5px 0;font-size:15px;line-height:20px}
+  body.mobile-mode .cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px 7px;padding:1px 5px 5px}
+  body.mobile-mode .card{height:67px;padding:1px;border-radius:9px}
+  body.mobile-mode .card:focus{border-radius:9px}
+  body.mobile-mode .thumb{height:39px;flex-basis:39px}
+  body.mobile-mode .thumb::before{width:44px;height:44px;top:19px;margin:-22px 0 0 -22px}
+  body.mobile-mode .thumb::after{width:40px;height:40px;top:19px;margin:-20px 0 0 -20px}
+  body.mobile-mode .thumb img{width:36px;height:36px;max-width:36px;max-height:36px}
+  body.mobile-mode .name{height:17px;line-height:16px;font-size:10px}
+}
+
+
+/* PC hamburger and persistent fullscreen button. */
+@media screen and (min-width:1025px) and (pointer:fine){body:not(.mobile-mode) #mobileMenuBtn{display:flex!important;align-items:center;justify-content:center;flex:0 0 46px;width:46px;height:46px;font-size:27px;border-radius:10px}}
+#playerFullscreenBtn{position:absolute;z-index:45;top:calc(14px + env(safe-area-inset-top,0px));right:calc(14px + env(safe-area-inset-right,0px));display:flex;align-items:center;justify-content:center;gap:8px;min-width:48px;min-height:46px;padding:0 13px;border:1px solid #ffffff42;border-radius:10px;background:#101720ed;color:#fff;font-size:15px;font-weight:700;line-height:1;cursor:pointer;opacity:1;visibility:visible;pointer-events:auto;transition:opacity .18s ease,visibility .18s ease;touch-action:manipulation;-webkit-tap-highlight-color:rgba(55,214,166,.25)}
+#ctrl{opacity:1;visibility:visible;transition:opacity .18s ease,visibility .18s ease}
+#player.player-ui-idle #playerFullscreenBtn,#player.player-ui-idle #ctrl{opacity:0;visibility:hidden;pointer-events:none}
+#player.player-fullscreen-idle #playerFullscreenBtn{opacity:0;visibility:hidden;pointer-events:none}
+/* Desktop hides the entire control strip; mobile hides only the fullscreen shortcut. */
+#playerFullscreenBtn:focus{outline:3px solid #37d6a6;background:#253545}
+#playerFullscreenIcon{font-size:25px;line-height:1}
+#playerFullscreenBtn .fullscreenLabel{white-space:nowrap}
+#playerTop{padding-right:190px}
+body.mobile-mode #playerFullscreenBtn{right:calc(8px + env(safe-area-inset-right,0px));top:calc(8px + env(safe-area-inset-top,0px));width:46px;height:46px;min-width:46px;min-height:46px;padding:0;border-radius:9px}
+body.mobile-mode #playerFullscreenBtn .fullscreenLabel{display:none}
+body.mobile-mode #playerTop{padding-right:calc(64px + env(safe-area-inset-right,0px))}
+#player:fullscreen,#player:-webkit-full-screen{position:fixed;inset:0;width:100%;height:100%;background:#000}
+</style>
+<script src="./dash.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shaka-player@5.2.12/dist/shaka-player.compiled.js"></script>
+</head>
+<body id="nm7-body" tabindex="-1">
+<div id="app">
+  <main id="home"><div id="homeTabs"><button id="mobileMenuBtn" type="button" tabindex="-1" aria-label="Mở menu">☰</button><button id="btnYouTubeTab" type="button" tabindex="-1"><span class="youtubeMark">▶</span><span>YouTube</span></button><button id="btnLiveTab" type="button" tabindex="-1" aria-label="Mở mục Live">⚽ LIVE</button><button id="btnNewsTab" type="button" tabindex="-1" aria-label="Mở Bản tin">▣ Bản tin</button><button id="appShortcut" type="button" tabindex="-1"><img id="shortcutIcon" src="/assets/nm7-main-logo.png" alt=""><span id="shortcutLabel">Chọn ứng dụng</span></button><div id="homeTitle" aria-hidden="true"></div></div><div id="homeRows"><div class="empty">Đang tải danh sách kênh…</div></div><section id="liveView" class="hidden" aria-label="Sự kiện LIVE"><header id="liveHeader"><h1>⚽ LIVE</h1><div id="liveStatus" role="status" aria-live="polite">Đang chờ dữ liệu Live…</div><button id="liveRefresh" type="button">↻ Làm mới</button></header><div id="liveEvents" role="list" aria-label="Danh sách sự kiện Live"></div></section></main>
+  <section id="player" class="hidden">
+    <button id="playerFullscreenBtn" type="button" aria-label="Toàn màn hình" title="Toàn màn hình" aria-pressed="false"><span id="playerFullscreenIcon" aria-hidden="true">⛶</span><span class="fullscreenLabel">Toàn màn hình</span></button>
+    <div id="playerTop"><div id="playerTitle"></div><div id="playerMeta"></div></div>
+    <video id="video" playsinline preload="auto"></video>
+    <div id="status">Đang chờ phát…</div>
+    <button id="officialBtn" class="cb hidden" type="button">Mở trình phát chính thức</button>
+    <div id="ctrl" class="hidden" role="group" aria-label="Điều khiển phát video">
+      <button class="cb" type="button" data-a="back" aria-label="Quay lại danh sách kênh">☰ Danh sách kênh</button>
+      <button class="cb" type="button" data-a="back10" aria-label="Tua lùi 10 giây">↶ -10s</button>
+      <button class="cb" type="button" data-a="play" aria-label="Phát hoặc tạm dừng">▶/Ⅱ</button>
+      <button class="cb" type="button" data-a="fwd30" aria-label="Tua tới 30 giây">+30s ↷</button><button class="cb backgroundBtn" type="button" data-a="background" aria-label="Chạy nền">◩ Chạy nền</button>
+      <button class="cb" type="button" data-a="next" aria-label="Chuyển kênh tiếp theo">CH +</button><button id="liveServerBtn" class="cb hidden" type="button" data-a="server" aria-label="Chọn server của sự kiện LIVE">⚽ Server</button>
+    </div>
+    <div id="quick" class="hidden"><div id="quickTitle"></div><div id="quickCards" class="quickCards"></div></div>
+  </section>
+  <aside id="side" class="hidden">
+    <div id="sideHeader"><img src="/assets/nm7-main-logo.png" alt="NM7 TV"><span>NM7 TV</span></div>
+    <div id="sideList"></div>
+    <div id="sideHint">←/Back đóng · ↑↓ chọn · →/OK xác nhận</div>
+  </aside>
+  <div id="dlg" class="hidden"><div id="box"></div></div>
+  <div id="toast"></div>
+  <div id="debug"></div>
+  <div id="liveDialog" class="hidden" aria-live="polite"></div>
+</div>
+<script src="./youtube.js?v=20261006-youtube-original1"></script>
+<script src="./mobile-background.js?v=20261006-bg1"></script>
+<script src="./live-core-livefix-20261014.js"></script>
+<script src="./app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1"></script>
+<script src="./live-ui-livefix-20261014.js"></script>
+</body>
+</html>

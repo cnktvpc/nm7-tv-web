@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07111f"><title>NM7 TV — Bản tin</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#07111f;color:#f4f7fb;font-family:Arial,Helvetica,sans-serif}button{font:inherit;cursor:pointer}header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:14px 20px;background:#081321ed;border-bottom:1px solid #26364b;backdrop-filter:blur(12px)}.back{border:1px solid #33465f;border-radius:10px;background:#152338;color:#fff;padding:10px 14px}.refresh{margin-left:auto;white-space:nowrap}.brand{font-weight:800;font-size:20px}.sub{color:#9fb0c4;font-size:12px;margin-top:3px}.tabs{display:flex;gap:8px;overflow-x:auto;padding:18px 20px 10px}.tab{border:1px solid #34445b;border-radius:999px;padding:10px 16px;background:#122035;color:#dce7f4;white-space:nowrap}.tab.active{background:#167bfa;border-color:#167bfa;color:white}.status{padding:4px 20px 12px;color:#a7b6c9;font-size:13px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;padding:8px 20px 30px}.item{display:block;text-align:left;min-width:0;border:1px solid #26374d;border-radius:14px;overflow:hidden;background:#0c1929;color:#fff;padding:0}.poster{width:100%;aspect-ratio:16/9;background:#17283d;display:flex;align-items:center;justify-content:center;color:#8095ae;overflow:hidden}.poster img{width:100%;height:100%;object-fit:cover}.play{position:absolute;inset:0;display:grid;place-items:center;font-size:28px;text-shadow:0 2px 10px #000}.thumb{position:relative}.title{padding:12px;font-weight:700;line-height:1.4;min-height:66px}.source{padding:0 12px 12px;color:#9fb0c4;font-size:12px}.empty{padding:30px 20px;color:#aab8c9}.viewer{position:fixed;inset:0;z-index:10;background:#050a12;display:none;flex-direction:column}.viewer.open{display:flex}.viewhead{display:flex;gap:12px;align-items:center;padding:12px 16px;background:#0c1929}.viewtitle{flex:1;min-width:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.viewbody{flex:1;min-height:0;display:flex;flex-direction:column}.viewbody iframe{display:none;border:0;width:100%;height:100%;background:#000}.viewbody video{width:100%;height:100%;background:#000;object-fit:contain;display:none}.viewnote{padding:8px 14px;color:#a8b8ca;font-size:12px;background:#0c1929}@media(max-width:560px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:8px 12px}.tabs{padding-left:12px}.status{padding-left:12px}.item{border-radius:10px}.title{font-size:13px;padding:9px;min-height:60px}.source{padding:0 9px 9px}header{padding:12px}.brand{font-size:18px}.refresh{padding:10px 12px}.refreshLabel{display:none}}
+</style></head><body>
+<header><button class="back" id="back">← NM7</button><div><div class="brand">Bản tin</div><div class="sub">Highlights · Video trận đấu · Xem lại</div></div><button class="back refresh" id="refresh" type="button" aria-label="Cập nhật nội dung">↻ <span class="refreshLabel">Cập nhật</span></button></header>
+<nav class="tabs" aria-label="Danh mục"><button class="tab active" data-source="highlights">Highlight</button><button class="tab" data-source="replay">Xem lại</button><button class="tab" data-source="onplus">Tin thể thao</button></nav>
+<div class="status" id="status">Đang tải danh sách…</div><main id="grid" class="grid"><div class="empty">Đang tải nội dung…</div></main>
+<section class="viewer" id="viewer"><div class="viewhead"><button class="back" id="close">← Quay lại</button><div class="viewtitle" id="viewtitle"></div><button class="back" id="openSource">Mở nguồn ↗</button></div><div class="viewbody"><video id="streamPlayer" controls playsinline preload="metadata" aria-label="Trình phát video"></video><iframe id="frame" title="Nội dung video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div><div class="viewnote" id="viewnote">Video được phát từ trang nguồn. Nếu trang không cho phép nhúng, chọn “Mở nguồn”.</div></section>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js"></script>
+<script>
+(function(){
+'use strict';var source='highlights',items=[],grid=document.getElementById('grid'),status=document.getElementById('status'),viewer=document.getElementById('viewer'),frame=document.getElementById('frame'),video=document.getElementById('streamPlayer'),viewnote=document.getElementById('viewnote'),selected='',activeHls=null,selectedItem=null,loadSerial=0,warmStarted={};
+function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function warmInactiveSources(){['onplus','replay'].forEach(function(name){if(name===source||warmStarted[name])return;warmStarted[name]=true;fetch('/api/news?source='+encodeURIComponent(name),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(d){if(!Array.isArray(d.items)||!d.items.length)throw new Error('empty news list')}).catch(function(){warmStarted[name]=false})})}
+function load(next,forceRefresh){var previousSource=source;var keepCurrent=previousSource===next&&items.length>0;source=next;var serial=++loadSerial;document.querySelectorAll('.tab').forEach(function(b){b.classList.toggle('active',b.dataset.source===source)});status.textContent=forceRefresh?'Đang cập nhật dữ liệu mới nhất…':keepCurrent?'Đang kiểm tra dữ liệu mới…':'Đang tải danh sách…';if(!keepCurrent)grid.innerHTML='<div class="empty">Đang tải nội dung…</div>';
+var endpoint='/api/news?source='+encodeURIComponent(source)+(forceRefresh?'&refresh=1':'');
+fetch(endpoint,{cache:'no-store'}).then(function(r){return r.json().then(function(d){if(!r.ok){var er=new Error(d.error||'Nguồn tạm thời không khả dụng');er.sourceUrl=d.sourceUrl||'';throw er}return d})}).then(function(d){if(serial!==loadSerial)return;items=d.items||[];var imageCount=items.filter(function(it){return !!it.image}).length;status.textContent=items.length?('Có '+items.length+' nội dung · Ảnh '+imageCount+'/'+items.length+' · Nguồn: '+(d.label||d.source)+' · Cập nhật '+new Date(d.updatedAt).toLocaleTimeString()+(d.stale?' · Dữ liệu lưu tạm':'')):'Nguồn chưa trả về danh sách video. Bạn có thể mở trực tiếp trang nguồn.';if(!items.length){grid.innerHTML='<div class="empty">Chưa lấy được danh sách tự động. <a style="color:#6ab4ff" target="_blank" rel="noopener" href="'+esc(d.sourceUrl||'#')+'">Mở trang nguồn</a></div>';return}grid.innerHTML=items.map(function(it,i){var meta=[it.competition,it.matchTime].filter(Boolean).join(' · ')||it.source||d.label||'Nguồn video';return '<button class="item" data-i="'+i+'"><div class="thumb"><div class="poster">'+(it.image?'<img loading="lazy" src="'+esc(it.image)+'" alt="">':'<span>▶ Video</span>')+'</div><span class="play">▶</span></div><div class="title">'+esc(it.title)+'</div><div class="source">'+esc(meta)+'</div></button>'}).join('');grid.querySelectorAll('.poster img').forEach(function(img){img.addEventListener('error',function(){var parent=this.parentNode;this.remove();if(parent&&!parent.querySelector('span'))parent.insertAdjacentHTML('beforeend','<span>▶ Video</span>')},{once:true})});warmInactiveSources()}).catch(function(e){if(serial!==loadSerial)return;var fallback=e.sourceUrl||(source==='replay'?'https://bongplus.vip/':source==='onplus'?'https://onplus.com.vn/':'https://www.24h.com.vn/video-highlight-c953.html');if(keepCurrent){status.textContent='Không cập nhật được dữ liệu mới; vẫn giữ danh sách hiện có.';return}status.textContent='Không tải được danh sách.';grid.innerHTML='<div class="empty">'+esc(e.message||'Lỗi kết nối')+'<br><br><button class="back" id="retry">Thử lại</button> <a style="color:#6ab4ff;margin-left:10px" target="_blank" rel="noopener" href="'+esc(fallback)+'">Mở nguồn</a></div>';var r=document.getElementById('retry');if(r)r.onclick=function(){load(source,true)}})}
+
+function disposeVideo(){
+ try{if(activeHls){activeHls.destroy();activeHls=null}}catch(e){}
+ try{video.pause();video.removeAttribute('src');video.load()}catch(e){}
+ video.onerror=null;video.style.display='none';
+ if(frame){frame.style.display='none';frame.src='about:blank'}
+}
+function showPlayMessage(message){
+ if(frame){frame.style.display='none';frame.src='about:blank'}
+ video.style.display='none';
+ viewnote.textContent=message||'Không lấy được luồng phát trực tiếp. Có thể mở nguồn chính thức bằng nút phía trên.';
+}
+function playResolved(it){
+ const media=String(it.playbackUrl||''),kind=String(it.playbackType||(/\.m3u8(?:$|[?#])/i.test(media)?'hls':/\.mp4(?:$|[?#])/i.test(media)?'mp4':''));
+ if(!/^https?:\/\//i.test(media)||!['hls','mp4'].includes(kind)){
+  showPlayMessage(it.message||'Nguồn chưa cung cấp luồng HLS/MP4 có thể phát trực tiếp. Hãy dùng “Mở nguồn” để xem trên dịch vụ chính thức.');return
+ }
+ if(frame){frame.style.display='none';frame.src='about:blank'}
+ video.style.display='block';video.controls=true;video.playsInline=true;
+ viewnote.textContent='Đang mở video…';
+ video.onerror=function(){showPlayMessage('Trình duyệt không phát được luồng này. Kiểm tra khả năng tương thích hoặc mở nguồn chính thức.')};
+ if(kind==='hls'){
+  if(video.canPlayType('application/vnd.apple.mpegurl')){
+   video.src=media;video.play().catch(function(){viewnote.textContent='Video đã sẵn sàng — nhấn Play nếu trình duyệt chặn tự phát.'});return
+  }
+  if(window.Hls&&window.Hls.isSupported()){
+   activeHls=new Hls({enableWorker:true,lowLatencyMode:false});
+   activeHls.loadSource(media);activeHls.attachMedia(video);
+   activeHls.on(Hls.Events.MANIFEST_PARSED,function(){video.play().catch(function(){viewnote.textContent='Video đã sẵn sàng — nhấn Play nếu trình duyệt chặn tự phát.'})});
+   activeHls.on(Hls.Events.ERROR,function(_event,data){if(data&&data.fatal){try{activeHls.destroy()}catch(e){}activeHls=null;showPlayMessage('Không phát được luồng HLS trong trình duyệt này. Bạn vẫn có thể mở trang nguồn chính thức.')}});return
+  }
+  showPlayMessage('Trình duyệt này không hỗ trợ phát HLS. Hãy mở nguồn chính thức.');return
+ }
+ video.src=media;video.play().catch(function(){viewnote.textContent='Video đã sẵn sàng — nhấn Play nếu trình duyệt chặn tự phát.'})
+}
+function openItem(it){
+ disposeVideo();selectedItem=it;selected=it.sourcePageUrl||it.href||'';
+ document.getElementById('viewtitle').textContent=it.title||'Video';viewer.classList.add('open');
+ if(it.playbackUrl&&it.playbackType){playResolved(it);return}
+ viewnote.textContent='Đang lấy luồng phát từ nguồn…';
+ fetch('/api/news/play?source='+encodeURIComponent(source)+'&url='+encodeURIComponent(it.href||''),{cache:'no-store'})
+  .then(function(r){return r.json().then(function(d){if(!r.ok&&!d.ok){var e=new Error(d.message||d.error||'Không lấy được luồng phát');e.result=d;throw e}return d})})
+  .then(function(d){selected=d.sourceUrl||selected;selectedItem=Object.assign({},it,d);if(!d.ok){showPlayMessage(d.message);return}playResolved(d)})
+  .catch(function(e){selected=(e.result&&e.result.sourceUrl)||selected;showPlayMessage((e.result&&e.result.message)||e.message||'Không lấy được luồng phát. Hãy mở nguồn chính thức.')})
+}
+document.querySelectorAll('.tab').forEach(function(b){b.onclick=function(){load(b.dataset.source,false)}});document.getElementById('refresh').onclick=function(){load(source,true)};window.setInterval(function(){if(!document.hidden&&!viewer.classList.contains('open'))load(source,false)},90000);grid.addEventListener('click',function(e){var b=e.target.closest('[data-i]');if(b&&items[Number(b.dataset.i)])openItem(items[Number(b.dataset.i)])});function close(){viewer.classList.remove('open');disposeVideo();frame.src='about:blank';frame.style.display='block';selected='';selectedItem=null;viewnote.textContent='Video được phát từ trang nguồn. Nếu trang không cho phép nhúng, chọn “Mở nguồn”.'}document.getElementById('close').onclick=close;document.getElementById('openSource').onclick=function(){if(selected)window.open(selected,'_blank','noopener')};document.getElementById('back').onclick=function(){location.href='/'};document.addEventListener('keydown',function(e){if(e.key==='Escape'&&viewer.classList.contains('open'))close()});load(source);
+})();
+</script></body></html>

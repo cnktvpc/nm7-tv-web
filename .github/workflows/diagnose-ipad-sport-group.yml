@@ -1,0 +1,256 @@
+name: Diagnose iPad sports group playback
+on:
+  push:
+    branches:
+      - fix/youtube-original-coccoc-adblock-20261006
+    paths:
+      - ".github/workflows/diagnose-ipad-sport-group.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect sports group and matching HLS alternatives without leaking stream URLs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, urllib.parse, re
+          from difflib import SequenceMatcher
+          from urllib.parse import urlparse
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          req=urllib.request.Request(BASE+'/api/playlist?source=tv&default=android1069',
+              headers={'User-Agent':'NM7-iPad-Sport-Diagnose/1.0','Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=30) as r:
+              data=json.loads(r.read().decode('utf-8'))
+          channels=data.get('channels') or []
+          req2=urllib.request.Request(BASE+'/api/playlist?source=sport',
+              headers={'User-Agent':'NM7-iPad-Sport-Diagnose/1.0','Cache-Control':'no-cache'})
+          try:
+              with urllib.request.urlopen(req2,timeout=30) as r:
+                  sportData=json.loads(r.read().decode('utf-8'))
+              sportSource=sportData.get('channels') or []
+          except Exception as e:
+              print('SPORT_SOURCE_FETCH_ERROR',type(e).__name__,str(e)[:180])
+              sportData={};sportSource=[]
+          print('SPORT_SOURCE_CHANNELS',len(sportSource),'SOURCE',sportData.get('source'),'CACHED',sportData.get('cached'))
+          print('PLAYLIST_CHANNELS',len(channels),'SOURCE',data.get('source'),'CACHED',data.get('cached'))
+          groups=sorted(set(str(c.get('group') or '') for c in channels if re.search(r'sport|thể thao|the thao|bóng đá|bong da',str(c.get('group') or ''),re.I)))
+          print('SPORT_RELATED_GROUPS',json.dumps(groups,ensure_ascii=False))
+          sports=[c for c in channels if re.search(r'thể thao|the thao|sport|bóng đá|bong da',str(c.get('group') or ''),re.I)]
+          print('SPORT_CHANNEL_COUNT',len(sports))
+          def safe_candidate(c):
+              u=str(c.get('url') or c.get('resolvedUrl') or '')
+              p=urlparse(u)
+              ext=''
+              m=re.search(r'\.(m3u8?|mpd|flv|mp4|ts|m4s)(?:$|[?#])',p.path+'?x',re.I)
+              if m: ext=m.group(1).lower()
+              typ=str(c.get('type') or '')
+              if not typ:
+                  typ='dash' if c.get('dash') or ext=='mpd' else 'hls' if c.get('hls') or ext in ('m3u','m3u8') else 'flv' if c.get('flv') or ext=='flv' else 'mpegts' if ext in ('ts','m4s') else 'unknown'
+              drm=c.get('drm')
+              drmInfo={'present':bool(drm),'type':drm.get('type') if isinstance(drm,dict) else None,'hasKey':bool(isinstance(drm,dict) and (drm.get('key') or drm.get('clearKeys'))),'hasLicense':bool(isinstance(drm,dict) and (drm.get('license') or drm.get('licenseUrl')))}
+              refHost=urlparse(str(c.get('ref') or '')).hostname or ''
+              headers=c.get('headers') or {}
+              return {'type':typ,'extension':ext,'host':p.hostname or '', 'refHost':refHost,'ua':'custom' if c.get('ua') else 'browser-default','originHeader':bool(headers.get('Origin')),'otherHeaders':[str(k) for k in headers.keys() if str(k).lower() not in ('origin','referer','user-agent')],'drm':drmInfo,'forceProxy':bool(c.get('forceProxy'))}
+          def norm(name):
+              s=str(name or '').lower()
+              s=re.sub(r'\[[^\]]*\]|\([^)]*\)',' ',s)
+              s=re.sub(r'\b(hd|fhd|uhd|4k|50fps|25fps|live|trực tiếp|fpt play|backup|dự phòng|server|nguồn)\b',' ',s)
+              s=re.sub(r'[^a-z0-9]+','',s)
+              return s
+          # Index every clear HLS channel from all other groups by normalized name.
+          hlsIndex={}
+          for x in channels:
+              g=str(x.get('group') or '')
+              for cand in x.get('candidates') or []:
+                  u=str(cand.get('url') or '')
+                  if not cand.get('drm') and (cand.get('hls') or str(cand.get('type') or '').lower()=='hls' or re.search(r'\.m3u8?(?:$|[?#])',u,re.I)):
+                      hlsIndex.setdefault(norm(x.get('name')),[]).append({'name':x.get('name'),'group':g,**safe_candidate(cand)})
+          # Include a separate sports playlist; compare likely equivalents even when names differ slightly.
+          crossHls={}
+          for x in sportSource:
+              g=str(x.get('group') or '')
+              for cand in x.get('candidates') or []:
+                  u=str(cand.get('url') or '')
+                  if not cand.get('drm') and (cand.get('hls') or str(cand.get('type') or '').lower()=='hls' or re.search(r'\.m3u8?(?:$|[?#])',u,re.I)):
+                      crossHls.setdefault(norm(x.get('name')),[]).append({'name':x.get('name'),'group':g,'dataset':'sport',**safe_candidate(cand)})
+          probeTargets=[]
+          for c in sports:
+              cs=c.get('candidates') or []
+              key=norm(c.get('name'))
+              alt=[x for x in hlsIndex.get(key,[]) if x.get('group')!=c.get('group')]
+              alt += crossHls.get(key,[])
+              near=[]
+              for x in channels+sportSource:
+                  xn=norm(x.get('name'))
+                  if not xn or xn==key: continue
+                  ratio=SequenceMatcher(None,key,xn).ratio()
+                  overlap=len(set(re.findall(r'[a-z0-9]+',key)) & set(re.findall(r'[a-z0-9]+',xn)))
+                  if ratio<0.48 and overlap==0: continue
+                  opts=[]
+                  for xc in x.get('candidates') or []:
+                      xu=str(xc.get('url') or '')
+                      if not xc.get('drm') and (xc.get('hls') or str(xc.get('type') or '').lower()=='hls' or re.search(r'\\.m3u8?(?:$|[?#])',xu,re.I)):
+                          opts.append(safe_candidate(xc))
+                  if opts:
+                      near.append({'name':x.get('name'),'group':x.get('group'),'dataset':'sport' if x in sportSource else 'tv','similarity':round(ratio,2),'hls':opts[:3]})
+              near.sort(key=lambda x:x['similarity'],reverse=True)
+              print('SPORT_CHANNEL',json.dumps({'name':c.get('name'),'id':c.get('id'),'group':c.get('group'),'candidateCount':len(cs),'candidates':[safe_candidate(x) for x in cs],'matchingHLSAlternatives':alt[:8],'similarHLSAlternatives':near[:8]},ensure_ascii=False))
+              for i,x in enumerate(cs[:5]):
+                  u=str(x.get('url') or '')
+                  if not u.startswith(('http://','https://')): continue
+                  q={'u':u}
+                  if x.get('ua'): q['ua']=str(x['ua'])
+                  if x.get('ref'): q['r']=str(x['ref'])
+                  if x.get('headers'): q['h']=json.dumps(x['headers'],separators=(',',':'))
+                  probeTargets.append((str(c.get('name')),i,BASE+'/api/probe?'+urllib.parse.urlencode(q)))
+          for name,i,url in probeTargets[:60]:
+              try:
+                  with urllib.request.urlopen(url,timeout=15) as r:
+                      d=json.loads(r.read().decode('utf-8'))
+                  final=urlparse(str(d.get('resolvedUrl') or d.get('finalUrl') or '')).hostname or ''
+                  print('PROBE',json.dumps({'channel':name,'candidate':i,'type':d.get('type'),'contentType':d.get('contentType'),'finalHost':final,'error':d.get('error')},ensure_ascii=False))
+              except Exception as e:
+                  print('PROBE_ERROR',json.dumps({'channel':name,'candidate':i,'errorType':type(e).__name__,'message':str(e)[:120]},ensure_ascii=False))
+          # GET-test HLS candidates directly and through the same-origin worker.
+          getTargets=[]
+          seenUrls=set()
+          for c in sports:
+              for i,x in enumerate(c.get('candidates') or []):
+                  u=str(x.get('url') or '')
+                  if not u.startswith(('http://','https://')): continue
+                  if not (x.get('hls') or str(x.get('type') or '').lower()=='hls' or re.search(r'\\.m3u8?(?:$|[?#])',u,re.I)): continue
+                  if u in seenUrls: continue
+                  seenUrls.add(u);getTargets.append((str(c.get('name')),i,x))
+          # include all current sports HLS candidates plus HLS alternatives found in primary playlist/source
+          for c in channels+sportSource:
+              name=str(c.get('name') or '')
+              nm=norm(name)
+              if not any(k in nm for k in ('htvthethao','onsports','vtv6','sctv15','sctv17','sctv22','onfootball','onsportsnews','ongolf')): continue
+              for i,x in enumerate(c.get('candidates') or []):
+                  u=str(x.get('url') or '')
+                  if not u.startswith(('http://','https://')): continue
+                  if not (x.get('hls') or str(x.get('type') or '').lower()=='hls' or re.search(r'\\.m3u8?(?:$|[?#])',u,re.I)): continue
+                  if u in seenUrls: continue
+                  seenUrls.add(u);getTargets.append((name,i,x))
+          def safe_get(url,headers):
+              try:
+                  req=urllib.request.Request(url,headers=headers,method='GET')
+                  with urllib.request.urlopen(req,timeout=12) as r:
+                      body=r.read(2048)
+                      ct=r.headers.get('Content-Type','')
+                      return {'status':r.status,'contentType':ct,'bytesRead':len(body),'isM3U':body.lstrip().startswith(b'#EXTM3U'),'isHTML':b'<html' in body[:512].lower()}
+              except urllib.error.HTTPError as e:
+                  return {'status':e.code,'error':'HTTPError'}
+              except Exception as e:
+                  return {'errorType':type(e).__name__,'error':str(e)[:100]}
+          # Probe potential official-domain HLS variants reported by the channel providers/public manifests.
+          # Only status/content metadata is logged; stream URLs and query tokens are never printed.
+          providerTargets=[
+              ('SCTV15 official CDN','https://e1.endpoint.cdn.sctvonline.vn/playlist/sctv15/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('SCTV15 CDN no Referer','https://e1.endpoint.cdn.sctvonline.vn/playlist/sctv15/index.m3u8',{'User-Agent':'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'}),
+              ('SCTV17 official CDN','https://e1.endpoint.cdn.sctvonline.vn/playlist/sctv17/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('SCTV17 CDN no Referer','https://e1.endpoint.cdn.sctvonline.vn/playlist/sctv17/index.m3u8',{'User-Agent':'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'}),
+              ('SCTV22 VTVPrime HLS','https://liveh34.vtvprime.vn/hls/SCTV22/04.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Sports VTVcab HLS','https://liveh34.vtvcab.vn/hls/THETHAO_HD/04.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Football VTVcab HLS','https://liveh34.vtvcab.vn/hls/BONGDA_HD/04.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Sports News VTVcab HLS','https://liveh34.vtvcab.vn/hls/THETHAO_TINTUC_HD/04.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Golf VTVcab HLS','https://livevlive.vtvcab.vn/hls/OS_THETHAO_GOLF_HD/sc-gaFEAA/m40_index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Sports+ VTVcab HLS','https://livevlive.vtvcab.vn/hls/HAY_TV_1924/sc-gaFEAA/m40_index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Football VTVcab HLS v2','https://livevlive.vtvcab.vn/hls/OS_BONGDA_HD/sc-gaFEAA/m40_index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+          ]
+          for label,url,headers in providerTargets:
+              print('PROVIDER_HLS_GET',json.dumps({'label':label,'host':urlparse(url).hostname,'result':safe_get(url,headers)},ensure_ascii=False))
+          altTargets=[
+              ('SCTV15 alternate edge CDN','https://z215ymcm4tliv.vcdn.cloud/s9/hls/sctv15/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV15 alternate CDN 2','https://kw9lnjfrr3liv.vcdn.cloud/SCTV15/index.m3u8',{'User-Agent':'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'}),
+              ('SCTV15 alternate vcdn path','https://uy7qk2oykpliv.vcdn.cloud/hls/sctv15/index.m3u8',{'User-Agent':'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'}),
+              ('SCTV15 e8 HLS','https://e8.endpoint.cdn.sctvonline.vn/hls/sctv15/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV17 official chunklist','https://e7.endpoint.cdn.sctvonline.vn/live/smil:SCTV17.smil/chunklist_b1692000.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV17 edge chunklist','https://s12.edge.cdn.sctvonline.vn/cdn-cgi/edge/v2/e7.endpoint.cdn.sctvonline.vn/nginx.s12.edge.cdn.sctvonline.vn/live/smil:SCTV17.smil/chunklist_b1692000.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV17 e7 HLS','https://e7.endpoint.cdn.sctvonline.vn/hls/sctv17/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV22 current channel HLS','https://e1.endpoint.cdn.sctvonline.vn/channel/sctv22/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV22 channel s1 HLS','https://e1.endpoint.cdn.sctvonline.vn/channel/sctv22/s1/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV22 e5 HLS','https://e5.endpoint.cdn.sctvonline.vn/hls/sctv22/index.m3u8',{'Referer':'https://sctvonline.vn/','User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('ON Sports WinTV HLS','https://api.wintv.me/vtvcab3/index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Sports+ WinTV HLS','https://api.wintv.me/vtvcab6/index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Football WinTV HLS','https://api.wintv.me/vtvcab16/index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Sports News WinTV HLS','https://api.wintv.me/vtvcab18/index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Golf WinTV HLS','https://api.wintv.me/360/169/index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('ON Golf alt WinTV HLS','https://api.wintv.me/360/188/index.m3u8',{'User-Agent':'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36'}),
+              ('SCTV15 vthanhtivi resolver','https://code.vthanhtivi.pw/getlink/sctvonline/sctv15/playlist.m3u8',{'User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV17 vthanhtivi resolver','https://code.vthanhtivi.pw/getlink/sctvonline/sctv17/playlist.m3u8',{'User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+              ('SCTV22 vthanhtivi resolver','https://code.vthanhtivi.pw/getlink/sctvonline/sctv22/playlist.m3u8',{'User-Agent':'ReactNativeVideo/3.4.4 (Linux;Android 9) ExoPlayerLib/2.13.3'}),
+          ]
+          for label,url,headers in altTargets:
+              direct=safe_get(url,headers)
+              q={'u':url,'ua':headers.get('User-Agent','Mozilla/5.0')}
+              if headers.get('Referer'):q['r']=headers['Referer']
+              proxy=safe_get(BASE+'/api/stream?'+urllib.parse.urlencode(q),{'User-Agent':'Mozilla/5.0'})
+              p=urlparse(url)
+              print('SPORT_ALT_TEST',json.dumps({'label':label,'host':p.hostname,'path':p.path,'direct':direct,'proxy':proxy},ensure_ascii=False))
+          for name,i,x in getTargets[:32]:
+              u=str(x.get('url') or '')
+              h={'User-Agent':str(x.get('ua') or 'Mozilla/5.0')[:500]}
+              ref=str(x.get('ref') or '')
+              if ref:h['Referer']=ref
+              for k,v in (x.get('headers') or {}).items():
+                  if isinstance(v,str) and k.lower() not in ('host','connection','content-length','cookie','user-agent','referer'):
+                      h[k]=v
+              direct=safe_get(u,h)
+              q={'u':u}
+              if x.get('ua'):q['ua']=str(x['ua'])
+              if ref:q['r']=ref
+              if x.get('headers'):q['h']=json.dumps(x['headers'],separators=(',',':'))
+              proxyUrl=BASE+'/api/stream?'+urllib.parse.urlencode(q)
+              proxy=safe_get(proxyUrl,{'User-Agent':'Mozilla/5.0'})
+              p=urlparse(u)
+              print('HLS_GET_TEST',json.dumps({'channel':name,'candidate':i,'host':p.hostname or '', 'path':p.path[-70:],'forceProxy':bool(x.get('forceProxy')),'direct':direct,'workerProxy':proxy},ensure_ascii=False))
+          # Follow one HLS child playlist and one media segment through the same-origin proxy.
+          # Log response metadata only; never print playlist URLs, query strings or tokens.
+          def fetch_sample(url):
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'},method='GET')
+                  with urllib.request.urlopen(req,timeout=15) as r:
+                      body=r.read(8192)
+                      return {'status':r.status,'contentType':r.headers.get('Content-Type',''),'bytesRead':len(body),'isM3U':body.lstrip().startswith(b'#EXTM3U'),'finalUrl':r.geturl(),'body':body}
+              except urllib.error.HTTPError as e:
+                  return {'status':e.code,'error':'HTTPError'}
+              except Exception as e:
+                  return {'errorType':type(e).__name__,'error':str(e)[:100]}
+          def proxy_chain(name,x):
+              u=str(x.get('url') or '')
+              q={'u':u}
+              if x.get('ua'):q['ua']=str(x['ua'])
+              if x.get('ref'):q['r']=str(x['ref'])
+              if x.get('headers'):q['h']=json.dumps(x['headers'],separators=(',',':'))
+              current=BASE+'/api/stream?'+urllib.parse.urlencode(q)
+              steps=[]
+              for depth in range(3):
+                  d=fetch_sample(current)
+                  step={k:d.get(k) for k in ('status','contentType','bytesRead','isM3U','error','errorType')}
+                  try:
+                      host=urlparse(str(d.get('finalUrl') or current)).hostname or ''
+                  except Exception:
+                      host=''
+                  step['host']=host
+                  steps.append(step)
+                  body=d.get('body')
+                  if not isinstance(body,(bytes,bytearray)) or not body.lstrip().startswith(b'#EXTM3U'):
+                      break
+                  child=next((line.strip() for line in body.decode('utf-8','replace').splitlines() if line.strip() and not line.strip().startswith('#')),None)
+                  if not child:break
+                  current=urllib.parse.urljoin(str(d.get('finalUrl') or current),child)
+              return steps
+          for name,i,x in getTargets:
+              compact=str(name).lower()
+              if not (compact.startswith('sctv15') or compact.startswith('sctv17') or compact.startswith('htv thể thao') or compact.startswith('vtv6')):
+                  continue
+              print('HLS_PROXY_CHAIN',json.dumps({'channel':name,'candidate':i,'chain':proxy_chain(name,x)},ensure_ascii=False))
+          PY

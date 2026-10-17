@@ -1,0 +1,48 @@
+name: Web Browser Validation
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+      - fix/**
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check web JavaScript
+        run: |
+          node --check web-tv/app.js
+          node --check web-tv/app-safari-policy.js
+          node --check web-tv/youtube.js
+          node --input-type=module --check < worker.js
+          node --check api/stream.js
+          node --check api/probe.js
+          node --check api/license.js
+          node --check api/playlist.js
+      - name: Regression checks
+        run: |
+          node scripts/test-device-default-preset.js
+          node scripts/test-playback-startup-fallback.js
+          node scripts/test-worker-hls-segments.js
+          node scripts/test-custom-m3u-headers-probe.js
+          node scripts/test-worker-dash-proxy.js
+          node scripts/test-sctv4k-proxy-preference.js
+          node scripts/test-stalker-default-user-agent.js
+      - name: Check required web assets
+        run: |
+          test -s web-tv/index.html
+          test -s web-tv/app.js
+          test -s web-tv/assets/nm7-default-background.webp
+          test -s web-tv/dash.all.min.js
+          grep -q 'Android 1.0.69' web-tv/index.html || true

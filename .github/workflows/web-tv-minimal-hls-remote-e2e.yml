@@ -1,0 +1,171 @@
+name: NM7 TV Web Browser remote + HLS E2E
+
+on:
+  push:
+    branches: ["main", "feat/**", "fix/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0 hls.js@1.7.3 http-server@14.1.1 >/dev/null 2>&1
+          npx playwright install --with-deps chromium >/dev/null 2>&1
+
+      - name: Generate HLS fixture
+        run: |
+          mkdir -p e2e-site/assets
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc=size=640x360:rate=25 -f lavfi -i sine=frequency=440:sample_rate=44100 -t 8 -vf format=yuv420p -c:v libx264 -profile:v baseline -level 3.0 -preset ultrafast -g 50 -keyint_min 50 -sc_threshold 0 -c:a aac -b:a 96k -ac 2 -ar 44100 -f hls -hls_segment_type mpegts -hls_time 2 -hls_list_size 0 e2e-site/test-hls.m3u8
+          cp node_modules/hls.js/dist/hls.min.js e2e-site/hls.min.js
+          cp web-tv/index.html e2e-site/index.html
+          cp web-tv/app.js e2e-site/app.js
+          cp web-tv/youtube.js e2e-site/youtube.js
+          cp web-tv/mobile-background.js e2e-site/mobile-background.js
+          cp web-tv/dash.all.min.js e2e-site/dash.all.min.js
+          cp web-tv/assets/nm7-default-background.webp e2e-site/assets/nm7-default-background.webp
+          cp web-tv/assets/nm7-main-logo.png e2e-site/assets/nm7-main-logo.png
+
+      - name: Write fixture playlist and adapt page
+        run: |
+          python3 - <<'PY'
+          import json, re
+          logo="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+          channels=[{"id":chr(65+i),"name":f"Kênh {i+1}","group":"Nhóm 1" if i<25 else "Nhóm 2","logo":logo,"candidates":[{"url":"/test-hls.m3u8","hls":True}]} for i in range(25)]
+          with open("e2e-site/playlist.json","w") as f:
+            json.dump({"channels":channels},f,ensure_ascii=False)
+          p="e2e-site/index.html"
+          s=open(p,encoding="utf-8").read()
+          s=s.replace('<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js"></script>','<script src="/hls.min.js"></script>')
+          s=s.replace('<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js"></script>','')
+          s=s.replace('<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.16.51/dist/shaka-player.compiled.js"></script>','')
+          s=re.sub(r'<script src="./app-safari-policy\.js[^"]*"></script>','<script src="./app.js"></script>',s)
+          if 'app-safari-policy.js' in s:
+            raise SystemExit("E2E fixture still points to app-safari-policy.js, which is not copied into the fixture directory")
+          open(p,"w",encoding="utf-8").write(s)
+          p="e2e-site/app.js"
+          s=open(p,encoding="utf-8").read()
+          # Match the current preset-aware PLAYLISTS declarations in app.js.
+          # The test page must not hit production APIs when the local fixture is present.
+          s=s.replace("tv:'/api/playlist?source=tv&default=1'","tv:'/playlist.json'")
+          s=s.replace("tv2:'/api/playlist?source=tv&default=2'","tv2:'/playlist.json'")
+          s=s.replace("sport:'/api/playlist?source=sport'","sport:'/playlist.json'")
+          if "/api/playlist?source=tv&default=1" in s or "/api/playlist?source=tv&default=2" in s:
+            raise SystemExit("E2E fixture adaptation failed: source preset endpoint still points to production API")
+          if "tv:'/playlist.json'" not in s or "tv2:'/playlist.json'" not in s:
+            raise SystemExit("E2E fixture adaptation failed: local playlist fixture not configured")
+          open(p,"w",encoding="utf-8").write(s)
+          PY
+          node --check e2e-site/app.js
+
+      - name: Browser remote + HLS
+        run: |
+          set -euxo pipefail
+          cat > e2e-site/server.cjs <<'NODE_SERVER'
+          const http=require('http'),fs=require('fs'),path=require('path');
+          const root=path.resolve('.');
+          const types={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.m3u8':'application/vnd.apple.mpegurl','.ts':'video/mp2t','.m4s':'video/iso.segment','.mp4':'video/mp4','.webp':'image/webp','.png':'image/png'};
+          const server=http.createServer((req,res)=>{
+            let p=decodeURIComponent(new URL(req.url,'http://127.0.0.1').pathname);
+            if(p==='/'||p==='')p='/index.html';
+            const file=path.join(root,p.replace(/^\//,''));
+            if(!file.startsWith(root)||!fs.existsSync(file)){res.writeHead(404);return res.end('not found')}
+            const ext=path.extname(file),body=fs.readFileSync(file);
+            res.writeHead(200,{'Content-Type':types[ext]||'application/octet-stream','Cache-Control':'no-store','Access-Control-Allow-Origin':'*'});
+            res.end(body);
+          });
+          server.listen(4173,'127.0.0.1');
+          NODE_SERVER
+          (cd e2e-site && node server.cjs >/tmp/nm7-browser-e2e.log 2>&1) &
+          PID=$!
+          trap 'kill $PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          (async()=>{
+            const b=await chromium.launch({headless:true,args:['--autoplay-policy=no-user-gesture-required','--disable-gpu']});
+
+            const p=await b.newPage({viewport:{width:1920,height:1080}});
+            p.on('console',m=>console.log('BROWSER_CONSOLE='+m.type()+':'+m.text()));
+            p.on('pageerror',e=>console.log('BROWSER_PAGEERROR='+e.message));
+            const mediaResponses=[];
+            p.on('response',r=>{if(/test-hls|playlist\.json/.test(r.url())){const item={status:r.status(),path:new URL(r.url()).pathname};mediaResponses.push(item);console.log('BROWSER_RESPONSE='+JSON.stringify(item))}});
+            await p.goto('http://127.0.0.1:4173/?debug=1',{waitUntil:'domcontentloaded',timeout:30000});
+            await p.waitForSelector('.card',{timeout:15000});
+            const cards=await p.locator('.card').count();
+            if(cards!==25)throw new Error('cards='+cards);
+            const geom=await p.evaluate(()=>{const card=document.querySelector('.card'),logo=document.querySelector('.thumb img');const cs=getComputedStyle(card),ls=logo?getComputedStyle(logo):null;return {cardW:cs.width,cardH:cs.height,logoW:ls?.width||'',logoH:ls?.height||'',bg:cs.backgroundColor}});
+            console.log('GEOMETRY='+JSON.stringify(geom));
+            if(geom.cardW!=='128px'||geom.cardH!=='70px'||geom.logoW!=='48px'||geom.logoH!=='48px')throw new Error('1.0.69 geometry '+JSON.stringify(geom));
+            const align=await p.evaluate(()=>{const card=document.querySelector('.card'),thumb=document.querySelector('.thumb'),img=document.querySelector('.thumb img');const a=card.getBoundingClientRect(),t=thumb.getBoundingClientRect(),i=img.getBoundingClientRect();return {card:[a.left+a.width/2,a.top+a.height/2],thumb:[t.left+t.width/2,t.top+26],img:[i.left+i.width/2,i.top+i.height/2]}});
+            console.log('FOCUS_ANCHOR='+JSON.stringify(align));
+            await p.screenshot({path:'e2e-site/final-home.png'});
+            if(Math.abs(align.thumb[0]-align.img[0])>1||Math.abs(align.thumb[1]-align.img[1])>1)throw new Error('focus/logo center mismatch '+JSON.stringify(align));
+
+            let init=await p.evaluate(()=>({tag:document.activeElement?.tagName,row:document.activeElement?.dataset?.row,col:document.activeElement?.dataset?.col}));
+            if(init.tag!=='BUTTON'||init.row!=='0'||init.col!=='0')throw new Error('initial focus '+JSON.stringify(init));
+
+            await p.keyboard.press('ArrowRight');
+            await p.waitForTimeout(100);
+            let right=await p.evaluate(()=>({row:document.activeElement?.dataset?.row,col:document.activeElement?.dataset?.col,scroll:document.querySelector('.cards')?.scrollLeft||0}));
+            if(right.row!=='0'||right.col!=='1')throw new Error('RIGHT focus '+JSON.stringify(right));
+            for(let i=0;i<12;i++){await p.keyboard.press('ArrowRight');await p.waitForTimeout(20);}
+            let edge=await p.evaluate(()=>({col:document.activeElement?.dataset?.col,scroll:document.querySelector('.cards')?.scrollLeft||0}));
+            if(edge.col!=='13'||edge.scroll<=0)throw new Error('RIGHT edge did not scroll '+JSON.stringify(edge));
+            for(let i=0;i<20;i++){await p.keyboard.press('ArrowRight');await p.waitForTimeout(10);}
+            let end=await p.evaluate(()=>({col:document.activeElement?.dataset?.col,scroll:document.querySelector('.cards')?.scrollLeft||0}));
+            if(end.col!=='24')throw new Error('RIGHT reached wrong end '+JSON.stringify(end));
+
+            for(let i=0;i<24;i++){await p.keyboard.press('ArrowLeft');await p.waitForTimeout(10);}
+            await p.keyboard.press('ArrowLeft');
+            await p.waitForTimeout(100);
+            if(await p.locator('#side:not(.hidden)').count()!==1)throw new Error('LEFT did not open menu');
+
+            await p.keyboard.press('ArrowDown');
+            await p.waitForTimeout(50);
+            let mi=await p.evaluate(()=>document.activeElement?.dataset?.menu);
+            if(mi!=='1')throw new Error('menu DOWN focus='+mi);
+
+            await p.keyboard.press('Escape');
+            await p.waitForTimeout(100);
+            if(await p.locator('#side:not(.hidden)').count()!==0)throw new Error('menu did not close');
+
+            await p.keyboard.press('Enter');
+            await p.waitForSelector('#player:not(.hidden)',{timeout:3000});
+            const codec=await p.evaluate(()=>({h264:!!(window.MediaSource&&MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E, mp4a.40.2"')),hls:!!window.Hls,hlsSupported:!!(window.Hls&&Hls.isSupported()),ms:!!window.MediaSource}));
+            console.log('CODEC_SUPPORT='+JSON.stringify(codec));
+            if(codec.h264){
+              await p.waitForFunction(()=>{const v=document.querySelector('#video');return !!v&&(v.readyState>=2&&v.currentTime>0)},null,{timeout:15000});
+              const media=await p.evaluate(()=>{const v=document.querySelector('#video');return {t:v.currentTime,ready:v.readyState,paused:v.paused,network:v.networkState,err:v.error?{code:v.error.code,msg:v.error.message}:null}});
+              console.log('REMOTE_OK='+JSON.stringify({initial:init,right,menuDown:mi}));
+              console.log('HLS_PLAYBACK='+JSON.stringify(media));
+              if(!(media.t>0&&media.ready>=2))throw new Error('HLS playback failed '+JSON.stringify(media));
+            }else{
+              // Some stock Playwright Chromium builds omit H.264/MSE codecs.
+              // In that environment verify the browser still fetches a valid HLS
+              // manifest and media segment instead of reporting a false player failure.
+              await p.waitForFunction(()=>performance.getEntriesByType('resource').some(x=>/test-hls0\.ts$/.test(x.name)),null,{timeout:7000});
+              const manifestOk=mediaResponses.some(x=>x.path.endsWith('test-hls.m3u8')&&x.status===200);
+              const segmentOk=mediaResponses.some(x=>x.path.endsWith('test-hls0.ts')&&x.status===200);
+              if(!manifestOk||!segmentOk)throw new Error('HLS fetch path failed in codec-limited browser '+JSON.stringify({manifestOk,segmentOk,mediaResponses}));
+              console.log('HLS_FETCH_PATH_OK_CODEC_UNAVAILABLE_SKIP');
+              console.log('REMOTE_OK='+JSON.stringify({initial:init,right,menuDown:mi}));
+            }
+            await b.close();
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Upload final UI screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nm7-tv-web-final-ui-screenshot
+          path: e2e-site/final-home.png
+          if-no-files-found: ignore

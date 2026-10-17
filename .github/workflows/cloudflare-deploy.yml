@@ -1,0 +1,516 @@
+name: Deploy NM7 TV Web to Cloudflare
+
+on:
+  push:
+    branches:
+      - fix/safari-drm-final-20261005
+      - fix/ios-official-drm-fallback-20261006
+      - fix/youtube-original-coccoc-adblock-20261006
+      - fix/vtv1-single-source-hide-default-urls-20261009
+      - stable/nm7-tv-web-2026-10-09
+  workflow_dispatch:
+
+concurrency:
+  group: nm7-cloudflare-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Check TV JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web-tv/app-safari-policy.js
+          node --check web-tv/app-safari-policy-pc-controls.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --check web-tv/app.js
+          node --check web-tv/live-core.js
+          node --check web-tv/live.js
+          node scripts/test-live-feed.js
+          node --check web-tv/youtube.js
+          node scripts/test-sport-playlist-refresh.js
+          node scripts/test-ipad-landscape-menu.js
+          node scripts/test-getout-news-entry.js
+          node scripts/test-onplus-media-url.js
+          node scripts/test-news-thumbnail-parser.js
+          node scripts/test-home-title-mobile-overlap.js
+          node scripts/test-desktop-home-tabs.js
+          node scripts/test-menu-fullscreen.js
+          test -f web-tv/ban-tin.html
+          echo "NM7_TV_JS_SYNTAX_SPORT_IPAD_AND_NEWS_REGRESSION_TESTS_OK"
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Deploy dedicated YouTube reverse proxy
+        if: github.ref != 'refs/heads/fix/vtv1-single-source-hide-default-urls-20261009'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.youtube.toml
+
+      - name: Smoke test YouTube redirect and ad guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          YTBASE="https://nm7-youtube-proxy.phuongnm7-iptv.workers.dev"
+
+          echo "=== Default YouTube navigation ==="
+          curl -sS --max-time 30 -D /tmp/yt-headers.txt -o /dev/null "$YTBASE/"
+          code="$(awk 'toupper($1) ~ /^HTTP\// {c=$2} END {print c}' /tmp/yt-headers.txt)"
+          location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/,"",$0); print $0}' /tmp/yt-headers.txt | tail -1 | tr -d '\r')"
+          echo "YOUTUBE_REDIRECT_STATUS=$code"
+          echo "YOUTUBE_REDIRECT_LOCATION=$location"
+          test "$code" = "302"
+          test "$location" = "https://www.youtube.com/"
+
+          echo "=== Ad endpoint guard ==="
+          ad_code="$(curl -sS --max-time 30 -o /tmp/yt-ad.txt -w "%{http_code}" "$YTBASE/pagead/")"
+          echo "YOUTUBE_AD_ENDPOINT_STATUS=$ad_code"
+          test "$ad_code" = "204"
+
+          echo "=== Explicit proxy mode is opt-in ==="
+          proxy_code="$(curl -sS --max-time 30 -o /tmp/yt-proxy.html -w "%{http_code}" "$YTBASE/?proxy=1")"
+          echo "YOUTUBE_EXPLICIT_PROXY_STATUS=$proxy_code"
+          echo "YOUTUBE_DIRECT_NAVIGATION_SMOKE_OK"
+
+      - name: Smoke test deployed Cloudflare Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          home_ok=0
+          for attempt in 1 2 3 4 5 6; do
+            curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__home_smoke=20261011-$attempt" -o /tmp/nm7-home.html
+            if python3 - <<'PY'
+          import re
+          html=open('/tmp/nm7-home.html',encoding='utf-8').read()
+          if re.search(r'<div id="homeTitle"[^>]*>\s*Danh sách kênh TV\s*</div>',html,re.I):
+              raise SystemExit('MOBILE_HOME_TITLE_OLD_EDGE: stale top heading still returned')
+          for marker in ('id="mobileMenuBtn"','id="btnYouTubeTab"','id="btnNewsTab"'):
+              if marker not in html:
+                  raise SystemExit('Top navigation missing after deploy: '+marker)
+          print('MOBILE_HOME_TITLE_OVERLAP_SMOKE_OK: no static title; top navigation controls present')
+          PY
+            then
+              home_ok=1
+              break
+            fi
+            echo "MOBILE_HOME_TITLE_WAITING_FOR_EDGE_PROPAGATION attempt=$attempt"
+            sleep 3
+          done
+          test "$home_ok" = "1" || { echo "MOBILE_HOME_TITLE_OVERLAP_FAIL: new home HTML was not visible after retries"; exit 1; }
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/assets/nm7-default-background.webp" -o /tmp/nm7-bg.webp
+          BG_META="$(file /tmp/nm7-bg.webp)"
+          echo "$BG_META"
+          echo "$BG_META" | grep -q "3840x2160"
+          test "$(sha256sum /tmp/nm7-bg.webp | cut -d' ' -f1)" = "d8af6ac8ba532db465dcb8c44e00b71865e6c9a712c8cc21cd0a2118400bd00d"
+          grep -q "NM7 TV 1.0.69" /tmp/nm7-home.html
+          grep -q "app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1" /tmp/nm7-home.html
+          grep -Fq "body.mobile-mode #mobileMenuBtn{display:flex;align-items:center;justify-content:center;flex:0 0 46px}" /tmp/nm7-home.html
+          ! grep -Fq 'id="playerBackBtn"' /tmp/nm7-home.html
+          grep -Fq 'data-a="back"' /tmp/nm7-home.html
+          grep -Fq 'Danh sách kênh' /tmp/nm7-home.html
+          grep -Fq 'data-a="back10"' /tmp/nm7-home.html
+          echo "IPAD_TAP_CONTROLS_WITHOUT_PERSISTENT_BACK_SMOKE_OK"
+          echo "IPAD_LANDSCAPE_HAMBURGER_SMOKE_OK"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/api/playlist?source=tv&default=1" -o /tmp/nm7-tv-default1.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/nm7-tv-default1.json',encoding='utf-8'))
+          channels=d.get('channels') or []
+          if not channels:
+              raise SystemExit('TV default 1 (GitHub-generated VietMiTV playlist) returned zero channels')
+          if d.get('upstream') != 'https://raw.githubusercontent.com/dungntk9/Iptv-phuongnm7/main/IPTV_Gop_VMTTV_vAppTV.m3u':
+              raise SystemExit('TV default 1 did not use the GitHub-generated VietMiTV playlist: '+str(d.get('upstream')))
+          print('TV_VIETMITV_DEFAULT1_SMOKE_OK channels=',len(channels),'upstream=',d.get('upstream'))
+          PY
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/api/playlist?source=tv&default=2" -o /tmp/nm7-tv.json
+          python3 - <<'PY'
+          import json, re
+          d=json.load(open('/tmp/nm7-tv.json',encoding='utf-8'))
+          channels=d.get('channels') or []
+          if not channels:
+              raise SystemExit('TV default 2 (default Cloudflare playlist Worker) returned zero channels')
+          if d.get('upstream') != 'https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/':
+              raise SystemExit('TV default 2 did not use legacy source: '+str(d.get('upstream')))
+          groups=[]
+          seen=set()
+          for c in channels:
+              g=c.get('group') or 'Khác'
+              if g not in seen:
+                  seen.add(g); groups.append(g)
+          expected=['VTV','VTVCab','Thể Thao','Quốc Tế','SCTV']
+          missing=[g for g in expected if g not in groups]
+          if missing:
+              raise SystemExit(f'required current default groups missing: {missing}; groups={groups[:20]}')
+          positions=[groups.index(g) for g in expected[:4]]
+          if positions != sorted(positions):
+              raise SystemExit(f'default TV group order changed: {positions}; groups={groups[:12]}')
+          print('TV_GROUP_ORDER_SMOKE_OK groups=',[(g,groups.index(g)) for g in expected])
+          def names(g): return [c.get('name','') for c in channels if (c.get('group') or 'Khác')==g]
+          def require_names(g, wants):
+              got=names(g)
+              missing=[w for w in wants if not any(w.lower() in n.lower() for n in got)]
+              if missing:
+                  raise SystemExit(f'{g} channels missing {missing}; actual={got[:20]}')
+          require_names('VTV',['VTV1','VTV2','VTV3','VTV4','VTV5','VTV5 Tây Nam Bộ','VTV5 Tây Nguyên','VTV6'])
+          require_names('VTVCab',['VTVCab 8 - ON BiBi','VTVCab 10 - ON Cine','VTVCab 5 - ON E Channel','VTVCab 9 - ON Info TV','VTVCab 21 - On Kids HD','VTVCab 16 - ON Football HD'])
+          require_names('Thể Thao',['HTV Thể Thao','SCTV15','SCTV17','SCTV22','VTVCab 3 - ON Sports HD'])
+          require_names('SCTV',['SCTV1','SCTV2','SCTV3'])
+          require_names('Phim Truyện',['SCTV Phim Tổng Hợp'])
+          ons=[c for c in channels if 'on sports hd' in str(c.get('name','')).lower() and 'vtvcab 3' in str(c.get('name','')).lower()]
+          if not ons:
+              raise SystemExit('VTVCab 3 - ON Sports HD was not found in the default playlist')
+          if not any((x.get('type') or '').lower()=='dash' and x.get('drm') for x in (ons[0].get('candidates') or [])):
+              raise SystemExit('VTVCab 3 - ON Sports HD has no DASH DRM candidate')
+          for prefix in ('sctv15','sctv17','sctv22'):
+              matches=[c for c in channels if str(c.get('id') or '').lower().startswith(prefix) or re.sub(r'[^a-z0-9]+','',str(c.get('name') or '').lower()).startswith(prefix)]
+              if not matches:
+                  raise SystemExit(prefix+' channel not found in the deployed playlist')
+              if not any(
+                  str(x.get('type') or '').lower()=='dash' and x.get('drm')
+                  for ch in matches for x in (ch.get('candidates') or [])
+              ):
+                  raise SystemExit(prefix+' original DASH/DRM candidate is missing')
+          print('SCTV15_17_ORIGINAL_DASH_PRESERVED_SMOKE_OK')
+          print('CLOUDFLARE_SMOKE_OK channels=',len(channels),'groups=',groups[:8])
+          PY
+
+          # LIVE is a dedicated feed; verify it does not depend on the merged sports playlist.
+          LIVE_HOME="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__live_smoke=20261012")"
+          python3 - "$LIVE_HOME" <<'PY'
+          import sys
+          html=sys.argv[1]
+          for marker in ('id="btnLiveTab"','id="liveView"','live-core-livefix-20261014.js','live-ui-livefix-20261014.js'):
+              if marker not in html:
+                  raise SystemExit('LIVE production homepage marker missing: '+marker)
+          print('LIVE_PRODUCTION_HOME_SMOKE_OK')
+          PY
+          curl -fsSL --max-redirs 3 --max-time 45 "$BASE/api/live-feed?__live_smoke=20261012" -o /tmp/nm7-live-feed.m3u
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('/tmp/nm7-live-feed.m3u').read_text(encoding='utf-8-sig')
+          if not text.lstrip().startswith('#EXTM3U'):
+              raise SystemExit('LIVE_PRODUCTION_FEED_NOT_M3U')
+          entries=sum(1 for line in text.splitlines() if line.strip().startswith('#EXTINF:'))
+          if entries < 1:
+              raise SystemExit('LIVE_PRODUCTION_FEED_HAS_NO_ENTRIES')
+          print(f'LIVE_PRODUCTION_FEED_SMOKE_OK entries={entries}')
+          PY
+          node scripts/test-live-feed.js /tmp/nm7-live-feed.m3u
+
+          HTML="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?v=20261005-vtvcab3-final2")"
+          python3 - "$HTML" <<'PY'
+          import sys
+          html=sys.argv[1]
+          if 'shaka-player@5.2.12' not in html:
+              raise SystemExit('Shaka 5.2.12 marker not found in deployed HTML')
+          print('SHAKA_5_2_12_SMOKE_OK')
+          PY
+          HOME="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/")"
+          python3 - "$HOME" <<'PY'
+          import sys
+          html=sys.argv[1]
+          for needle in ("btnYouTubeTab","youtube.js"):
+              if needle not in html:
+                  raise SystemExit("YouTube UI marker missing: "+needle)
+          print("YOUTUBE_UI_SMOKE_OK")
+          PY
+          APP="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1")"
+          python3 - "$APP" <<'PY'
+          import sys
+          app=sys.argv[1]
+          checks={
+              "ClearKey Safari guard":"if(isAppleTouchDevice()&&drm&&isDashDrmCandidate(cand))",
+              "Safari official fallback":"function safariOfficialUrl(c)",
+              "On Sports official fallback":"www.onplus.com.vn/channel?id=d61a9ace-2b7d-4474-9e6d-8f5c0c0d870d",
+              "ON Football official fallback":"www.onplus.com.vn/channel?id=1a8ca8c8-1754-4c02-ae49-146374f3a567",
+              "SCTV15 official fallback":"www.onplus.com.vn/channel?id=342775b9-7c03-4332-a7c5-54a4e7bf23c3",
+              "Safari fallback UI":"officialBtn",
+              "Apple direct DASH request filter":"(!appleDrm||S.proxyAttempt)",
+              "DRM hard recovery":"hardRestartDrm",
+              "real stall watchdog":"function armDrmStallWatch(reason)",
+              "VTV backup group resolver":"function isVtvBackupGroup(group)",
+              "sports group resolver":"function isSportsGroup(group)",
+              "sports fallback alias":"function appleFallbackKey(c)",
+              "cross-group HLS fallback":"var sportsPair=(isSportsGroup(group)||isSportsGroup(xGroup))&&family===appleFallbackKey(x)",
+              "Safari prefers non-DRM HLS":"for(var j=0;j<a.length;j++)if(classify(a[j])==='hls'&&!a[j].drm)return j;",
+              "Touch player controls binding":"function bindPlayerControls()",
+              "Touch control click dispatch":"ctrl.addEventListener('click'",
+              "Desktop-mode iPad detection":"var ipadDesktop=/Macintosh|MacIntel/i.test(ua+' '+platform)&&maxTouchPoints>1;",
+              "Back button closes player":"if(a==='back'){closePlayer();return}",
+              "TV default 1 API route":"tv:'/api/playlist?source=tv&default=1'",
+              "TV default 2 API route":"tv2:'/api/playlist?source=tv&default=2'",
+              "TV default 2 selector":"tvDefault2",
+              "TV preset-aware cache":"tvPreset===2?2:1",
+          }
+          for label,needle in checks.items():
+              if needle not in app:
+                  raise SystemExit(label+' marker missing: '+needle)
+          print('SAFARI_DRM_POLICY_SMOKE_OK')
+          PY
+
+          HOME_YT="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/")"
+          YTJS="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/youtube.js?v=20261006")"
+          BGJS="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/mobile-background.js?v=20261006-bg1")"
+          python3 - "$BGJS" <<'PY'
+          import sys
+          js=sys.argv[1]
+          for needle in ("navigator.mediaSession","requestPictureInPicture","webkitSetPresentationMode","visibilitychange","NM7Background"):
+              if needle not in js:
+                  raise SystemExit("Background playback marker missing: "+needle)
+          print("MOBILE_BACKGROUND_PLAYBACK_SMOKE_OK")
+          PY
+
+          python3 - "$HOME_YT" "$YTJS" <<'PY'
+          import sys
+          html,js=sys.argv[1],sys.argv[2]
+          for needle in ("btnYouTubeTab","youtube.js"):
+              if needle not in html:
+                  raise SystemExit("YouTube launcher marker missing: "+needle)
+          for needle in ("function openOriginal","https://www.youtube.com/"):
+              if needle not in js:
+                  raise SystemExit("Official YouTube launcher marker missing: "+needle)
+          if "/api/youtube/" in js:
+              raise SystemExit("Obsolete Piped YouTube API marker leaked into launcher")
+          print("YOUTUBE_ORIGINAL_LAUNCHER_SMOKE_OK")
+          PY
+
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/api/playlist?source=sport&refresh=1" -o /tmp/nm7-sport.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/nm7-sport.json',encoding='utf-8'))
+          channels=d.get('channels') or []
+          if not channels:
+              raise SystemExit(f"sport playlist returned zero channels: {d.get('error')}")
+          if d.get('refreshed') is not True:
+              raise SystemExit('sport playlist refresh flag was not honored: '+str(d))
+          expected='https://thethaonm7.phuongnm7-iptv.workers.dev/playlist.m3u'
+          if d.get('upstream') != expected:
+              raise SystemExit('sport playlist used wrong upstream: '+str(d.get('upstream'))+'; expected '+expected)
+          print('CLOUDFLARE_SPORT_REFRESH_SMOKE_OK channels=',len(channels),'upstream=',d.get('upstream'),'refreshed=',d.get('refreshed'))
+          PY
+
+          CUSTOM_URL='https://raw.githubusercontent.com/dungntk9/Iptv-phuongnm7/main/sports-auto.m3u?utm_source=chatgpt.com'
+          ENCODED_CUSTOM="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$CUSTOM_URL")"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/api/source?u=$ENCODED_CUSTOM" -o /tmp/nm7-custom.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/nm7-custom.json',encoding='utf-8'))
+          channels=d.get('channels') or []
+          if not channels:
+              raise SystemExit(f"custom source proxy returned zero channels: {d.get('error')}")
+          print('CLOUDFLARE_CUSTOM_SOURCE_SMOKE_OK channels=',len(channels),'upstream=',d.get('upstream'))
+          PY
+
+          
+          TARGET_URL='https://thethaonm7.phuongnm7-iptv.workers.dev/playlist.m3u'
+          ENCODED_TARGET="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TARGET_URL")"
+          curl -sS --max-redirs 3 --max-time 45 "$BASE/api/source?u=$ENCODED_TARGET" -o /tmp/nm7-target-source.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.load(open('/tmp/nm7-target-source.json',encoding='utf-8'))
+          channels=d.get('channels') or []
+          if channels:
+              summary='CLOUDFLARE_TARGET_SOURCE_SMOKE_OK channels='+str(len(channels))+' fetchMode='+str(d.get('fetchMode'))
+              print(summary)
+              Path('/tmp/nm7-target-source-summary.txt').write_text(summary,encoding='utf-8')
+          else:
+              summary='CLOUDFLARE_TARGET_SOURCE_SMOKE_FAILED '+str(d.get('error'))
+              print(summary)
+              Path('/tmp/nm7-target-source-summary.txt').write_text(summary,encoding='utf-8')
+              raise SystemExit(summary)
+          PY
+
+      - name: Smoke test production desktop home tabs
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__desktop_tabs_smoke=$(date +%s)" -o /tmp/nm7-desktop-home-tabs.html
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path('/tmp/nm7-desktop-home-tabs.html').read_text(encoding='utf-8')
+          for marker in ('id="btnYouTubeTab"', 'id="btnLiveTab"', 'id="btnNewsTab"'):
+              if marker not in html:
+                  raise SystemExit('DESKTOP_HOME_TABS_PRODUCTION_FAIL: missing '+marker)
+          desktop_rule=re.compile(
+              r'@media\s+screen\s+and\s+\(min-width:\s*1025px\)\s+and\s+\(pointer:\s*fine\)\s*\{[^}]*#homeTabs\s*\{[^}]*display:\s*flex',
+              re.S
+          )
+          if not desktop_rule.search(html):
+              raise SystemExit('DESKTOP_HOME_TABS_PRODUCTION_FAIL: desktop CSS rule not found in Worker HTML')
+          if not re.search(r'@media\s+screen\s+and\s+\(max-width:\s*1024px\)\s+and\s+\(pointer:\s*coarse\)', html):
+              raise SystemExit('DESKTOP_HOME_TABS_PRODUCTION_FAIL: mobile/tablet touch rules missing')
+          print('DESKTOP_HOME_TABS_PRODUCTION_SMOKE_OK: all three tabs and desktop/mobile media rules verified on Cloudflare Worker')
+          PY
+
+      - name: Smoke test PC player click opens controls and auto-hides player UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          CACHE_KEY="20261013-pc-click-autohide-player-controls2"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__menu_fullscreen_smoke=$(date +%s)" -o /tmp/nm7-menu-fullscreen.html
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-pc-controls.js?v=$CACHE_KEY&news=20261010&smoke=$(date +%s)" -o /tmp/nm7-menu-fullscreen.js
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('/tmp/nm7-menu-fullscreen.html').read_text(encoding='utf-8')
+          js=Path('/tmp/nm7-menu-fullscreen.js').read_text(encoding='utf-8')
+          checks={
+              'PC hamburger markup':'id="mobileMenuBtn"' in html,
+              'fullscreen button markup':'id="playerFullscreenBtn"' in html,
+              'fullscreen and nav controls hide on idle':'#player.player-ui-idle #playerFullscreenBtn,#player.player-ui-idle #ctrl{opacity:0;visibility:hidden;pointer-events:none}' in html,
+              'fullscreen button visible by default':'#playerFullscreenBtn{position:absolute' in html and 'opacity:1;visibility:visible;pointer-events:auto' in html,
+              'PC click focus logic retained':'function bindDesktopMouseFocus()' in js and 'target.focus({preventScroll:true})' in js,
+              'PC click opens controls':'function openPlayerOptionsFromMouse()' in js and 'S.ctrl=true;' in js and "$('ctrl').className='';" in js,
+              'auto-hide timer':'var PLAYER_UI_HIDE_DELAY=2400;' in js and "current.classList.add('player-ui-idle')" in js,
+              'hover stays hidden when idle':"if(!player.classList.contains('player-ui-idle'))showPlayerFullscreenButton()" in js,
+              'fullscreen button click wakes controls':"showPlayerFullscreenButton();togglePlayerFullscreen()" in js,
+              'TV directional pointer handler remains TV-only':'function onTvPointerMove(e){' in js and 'if(!isTvLikeDevice())return;' in js,
+          }
+          failed=[name for name,ok in checks.items() if not ok]
+          for name,ok in checks.items(): print(('PASS ' if ok else 'FAIL ')+name)
+          if failed: raise SystemExit('PC_PLAYER_CLICK_AUTOHIDE_CONTROLS_FAIL: '+', '.join(failed))
+          print('PC_PLAYER_CLICK_AUTOHIDE_CONTROLS_PRODUCTION_SMOKE_OK')
+          PY
+
+      - name: Smoke test mobile player auto-hide and silent unsupported seek
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__mobile_player_smoke=$(date +%s)" -o /tmp/nm7-mobile-player.html
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1&smoke=$(date +%s)" -o /tmp/nm7-mobile-player.js
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('/tmp/nm7-mobile-player.html').read_text(encoding='utf-8')
+          js=Path('/tmp/nm7-mobile-player.js').read_text(encoding='utf-8')
+          checks={
+              'mobile runtime asset active':'app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1' in html,
+              'mobile fullscreen idle CSS':'#player.player-fullscreen-idle #playerFullscreenBtn{opacity:0;visibility:hidden;pointer-events:none}' in html,
+              'mobile mode has dedicated timer':'function isMobileFullscreenAutoHideMode(){return !!S.mobileMode&&!isNativeTvMode()}' in js and 'var PLAYER_UI_HIDE_DELAY=2400;' in js,
+              'only fullscreen shortcut hides on mobile':"current.classList.add('player-fullscreen-idle')" in js,
+              'touch wakes fullscreen shortcut':"player.addEventListener('touchstart',function(){if(S.player)showPlayerFullscreenButton()},{passive:true})" in js,
+              'touch movement keeps shortcut visible':"player.addEventListener('touchmove',function(){if(S.player)showPlayerFullscreenButton()},{passive:true})" in js,
+              'unsupported seeking is silent':"toast('Luồng này không hỗ trợ tua')" not in js,
+              'desktop idle behavior is preserved':"current.classList.add('player-ui-idle')" in js and "var ctrl=$('ctrl');if(ctrl)ctrl.className='hidden';" in js,
+          }
+          for name,ok in checks.items(): print(('PASS ' if ok else 'FAIL ')+name)
+          failed=[name for name,ok in checks.items() if not ok]
+          if failed: raise SystemExit('MOBILE_PLAYER_AUTOHIDE_SMOKE_FAIL: '+', '.join(failed))
+          print('MOBILE_PLAYER_AUTOHIDE_PRODUCTION_SMOKE_OK')
+          PY
+
+      - name: Smoke test production Bản tin GetOut
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/ban-tin.html" -o /tmp/nm7-production-news.html
+          grep -q "Bản tin" /tmp/nm7-production-news.html
+          grep -q "Tin thể thao" /tmp/nm7-production-news.html
+          for src in highlights onplus replay; do
+            code=$(curl -sS --retry 2 --retry-delay 2 --max-time 35 -o "/tmp/nm7-production-news-$src.json" -w "%{http_code}" "$BASE/api/news?source=$src&refresh=1" || true)
+            python3 - "$src" "$code" "/tmp/nm7-production-news-$src.json" <<'PY'
+          import json,sys,time,datetime
+          source,code,path=sys.argv[1],sys.argv[2],sys.argv[3]
+          if code!='200':
+              raise SystemExit('PRODUCTION_NEWS_HTTP_FAIL source='+source+' code='+code)
+          with open(path,encoding='utf-8') as f: data=json.load(f)
+          items=data.get('items')
+          if data.get('source')!=source or not isinstance(items,list) or not items:
+              raise SystemExit('PRODUCTION_NEWS_EMPTY_OR_WRONG_SOURCE source='+source)
+          if data.get('error'):
+              raise SystemExit('PRODUCTION_NEWS_UPSTREAM_ERROR source='+source+' '+str(data['error']))
+          updated=data.get('updatedAt')
+          if updated:
+              age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(updated.replace('Z','+00:00'))).total_seconds()
+              if age>120: raise SystemExit('PRODUCTION_NEWS_STALE source='+source+' age_s='+str(round(age)))
+          images=sum(1 for item in items if item.get('image'))
+          if source in ('onplus','replay') and images==0:
+              raise SystemExit('PRODUCTION_NEWS_NO_THUMBNAILS source='+source)
+          if source=='replay':
+              named=sum(1 for item in items if item.get('homeName') and item.get('awayName'))
+              bad=[item.get('title','') for item in items if str(item.get('title','')).lower().rstrip().endswith((' vs',' vs.'))]
+              if named<len(items):
+                  raise SystemExit('PRODUCTION_REPLAY_TEAM_NAMES_INCOMPLETE named='+str(named)+' total='+str(len(items)))
+              if bad:
+                  raise SystemExit('PRODUCTION_REPLAY_INCOMPLETE_TITLE '+repr(bad[:3]))
+          print('PRODUCTION_NEWS_API_OK source='+source+' items='+str(len(items))+' images='+str(images)+' label='+str(data.get('label')))
+          PY
+          done
+          python3 - "$BASE" <<'PY'
+          import json,os,subprocess,sys,tempfile
+          from urllib.parse import urljoin
+          base=sys.argv[1]
+          def img_ok(src):
+              data=json.load(open('/tmp/nm7-production-news-'+src+'.json',encoding='utf-8'))
+              candidates=[]
+              seen=set()
+              for item in data.get('items',[]):
+                  u=item.get('image','')
+                  if not u: continue
+                  target=urljoin(base+'/',u)
+                  if target not in seen:
+                      seen.add(target); candidates.append((target,u))
+                  if len(candidates)>=3: break
+              verified=0
+              for i,(target,original) in enumerate(candidates):
+                  fd,path=tempfile.mkstemp(prefix='nm7-prod-news-img-')
+                  os.close(fd)
+                  try:
+                      proc=subprocess.run(['curl','-L','-sS','--max-time','12','--range','0-4095','--output',path,'--write-out','%{http_code}|%{content_type}|%{size_download}',target],capture_output=True,text=True)
+                      parts=proc.stdout.strip().split('|')
+                      code=parts[0] if len(parts)>0 else '000'
+                      mime=parts[1] if len(parts)>1 else ''
+                      size=int(parts[2]) if len(parts)>2 and parts[2].isdigit() else 0
+                      prefix=open(path,'rb').read(32) if os.path.exists(path) else b''
+                      magic=prefix.startswith((b'\xff\xd8\xff',b'\x89PNG\r\n\x1a\n',b'GIF87a',b'GIF89a',b'RIFF')) or (len(prefix)>=12 and prefix[4:8] in (b'ftyp',b'WEBP')) or b'<svg' in prefix.lower()
+                      ok=code in ('200','206') and mime.lower().startswith('image/') and size>0 and magic
+                      print('PRODUCTION_NEWS_IMAGE_'+('OK' if ok else 'FAIL')+' source='+src+' http='+code+' mime='+mime+' bytes='+str(size)+' magic='+str(bool(magic)).lower())
+                      if ok: verified+=1
+                  finally:
+                      try: os.unlink(path)
+                      except OSError: pass
+              if len(candidates)<2 or verified<2:
+                  raise SystemExit('PRODUCTION_NEWS_IMAGE_FETCH_FAIL source='+src+' verified='+str(verified)+' tested='+str(len(candidates)))
+              print('PRODUCTION_NEWS_IMAGE_FETCH_OK source='+src+' verified='+str(verified)+' tested='+str(len(candidates)))
+          for src in ('onplus','replay'): img_ok(src)
+          PY
+
+      - name: Publish Cloudflare production source smoke status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="success"
+          if [ "$JOB_STATUS" != "success" ]; then state="failure"; fi
+          summary="$(cat /tmp/nm7-target-source-summary.txt 2>/dev/null || true)"
+          if [ -z "$summary" ]; then summary="Cloudflare production deploy/smoke $state; inspect workflow logs"; fi
+          summary="${summary:0:140}"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$state" \
+            -f context="NM7 Cloudflare production source smoke" \
+            -f description="$summary" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+          echo "CLOUDFLARE_PRODUCTION_STATUS_PUBLISHED $state $summary"

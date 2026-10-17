@@ -1,0 +1,36 @@
+name: Resolve ON Football JS redirect
+on:
+  push:
+    branches: ["feat/tvdrm-player-integration-20261004"]
+  workflow_dispatch:
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve Khang ON Football landing to m3u8
+        shell: bash
+        run: |
+          set -euo pipefail
+          U='https://khanggtivi.xyz/vuminhthanh/vmt2024/onfootball/index.m3u8'
+          curl -L --max-time 20 -A 'Mozilla/5.0' -sS "$U" -o /tmp/page.html
+          echo "LANDING_BODY:"
+          head -c 2000 /tmp/page.html | strings
+          python3 - <<'PY'
+          import re,html,urllib.parse,urllib.request
+          p=open('/tmp/page.html',encoding='utf-8',errors='ignore').read()
+          print('MATCHED_LINES:')
+          for line in p.splitlines():
+              if re.search(r'location|m3u8|onfootball|token|window\.',line,re.I):
+                  print(line[:2000])
+          ms=re.findall(r'https?[^\'"]+\.m3u8[^\'"]*',p,re.I)
+          print('M3U8_URLS=',ms[:20])
+          for u in ms[:3]:
+              u=html.unescape(u)
+              r=urllib.request.Request(u,headers={'User-Agent':'Mozilla/5.0'})
+              try:
+                  b=urllib.request.urlopen(r,timeout=20).read(4000)
+                  print('RESOLVED',u)
+                  print(b.decode('utf-8','replace')[:4000])
+              except Exception as e: print('RESOLVE_ERR',u,e)
+          PY

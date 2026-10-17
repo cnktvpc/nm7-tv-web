@@ -1,0 +1,112 @@
+name: NM7 TV Web Live Preview
+
+on:
+  push:
+    branches:
+      - feature/live-section-2026-10-12
+  pull_request:
+    branches:
+      - stable/nm7-tv-web-2026-10-09
+    paths:
+      - "worker.js"
+      - "web-tv/**"
+      - "scripts/test-live-feed.js"
+      - "wrangler.live-preview.toml"
+      - ".github/workflows/live-preview.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: nm7-live-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Syntax and Live regressions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check worker.js
+          node --check web-tv/live-core.js
+          node --check web-tv/live.js
+          node --check web-tv/app-safari-policy.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --check web-tv/app.js
+          node --check web-tv/youtube.js
+      - name: Live-feed parser and integration regression
+        run: node scripts/test-live-feed.js
+      - name: Existing playlist and UI regressions
+        run: |
+          set -euo pipefail
+          node scripts/test-sport-playlist-refresh.js
+          node scripts/test-ipad-landscape-menu.js
+          node scripts/test-menu-fullscreen.js
+          node scripts/test-getout-news-entry.js
+          node scripts/test-onplus-media-url.js
+          node scripts/test-news-thumbnail-parser.js
+          node scripts/test-home-title-mobile-overlap.js
+
+  deploy-preview:
+    name: Deploy isolated Cloudflare preview
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+      - name: Deploy Live preview Worker only
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.live-preview.toml
+      - name: Smoke test preview home, Live feed and unchanged IPTV API
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web-live-preview.phuongnm7-iptv.workers.dev"
+          ready=0
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -sS --max-time 30 -o /tmp/nm7-live-home.html -w '%{http_code}' "$BASE/?__live_smoke=20261012-$attempt")"
+            if [ "$code" = "200" ] && python3 - <<'PY'
+          html=open('/tmp/nm7-live-home.html',encoding='utf-8').read()
+          required=('id="btnLiveTab"','id="liveView"','id="liveServerBtn"','live-core.js?v=20261012-live-core2','live.js?v=20261012-live-ui2')
+          missing=[item for item in required if item not in html]
+          if missing: raise SystemExit('LIVE_HOME_MARKERS_MISSING: '+repr(missing))
+          print('LIVE_PREVIEW_HOME_OK: Live tab, view, server control and versioned scripts present')
+          PY
+            then ready=1; break; fi
+            echo "LIVE_PREVIEW_WAITING_FOR_EDGE attempt=$attempt status=$code"
+            sleep 3
+          done
+          test "$ready" = "1"
+          feed_code="$(curl -sS --max-time 30 -o /tmp/nm7-live-feed.m3u -w '%{http_code}' -H 'Accept: application/vnd.apple.mpegurl,text/plain,*/*' "$BASE/api/live-feed?__smoke=20261012")"
+          echo "LIVE_FEED_HTTP_STATUS=$feed_code"
+          test "$feed_code" = "200"
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('/tmp/nm7-live-feed.m3u').read_text(encoding='utf-8-sig')
+          if not text.lstrip().startswith('#EXTM3U'): raise SystemExit('LIVE_FEED_NOT_M3U')
+          entries=sum(1 for line in text.splitlines() if line.strip().startswith('#EXTINF:'))
+          if entries<1: raise SystemExit('LIVE_FEED_HAS_NO_ENTRIES')
+          print(f'LIVE_FEED_SMOKE_OK: {entries} M3U entries, {len(text)} characters')
+          PY
+          curl -fsSL --max-time 30 "$BASE/api/playlist?source=tv&default=2" -o /tmp/nm7-tv-preset2.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('/tmp/nm7-tv-preset2.json').read_text(encoding='utf-8'))
+          if not isinstance(data.get('channels'),list): raise SystemExit('TV_PRESET2_API_SHAPE_CHANGED')
+          print(f'LIVE_PREVIEW_TV_API_UNCHANGED_OK: {len(data["channels"])} channels')
+          PY
+          echo "NM7_TV_WEB_LIVE_PREVIEW_SMOKE_OK"

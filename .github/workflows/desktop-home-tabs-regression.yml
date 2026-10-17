@@ -1,0 +1,22 @@
+name: Desktop home tabs regression
+on:
+  pull_request:
+    branches:
+      - stable/nm7-tv-web-2026-10-09
+  push:
+    branches:
+      - fix/desktop-home-tabs-20261013
+jobs:
+  desktop-home-tabs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: node --check web-tv/app.js
+      - name: Check desktop home navigation and mobile regression
+        run: |
+          node scripts/test-desktop-home-tabs.js
+          node scripts/test-menu-fullscreen.js

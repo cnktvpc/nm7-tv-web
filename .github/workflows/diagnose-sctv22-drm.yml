@@ -1,0 +1,121 @@
+name: Diagnose SCTV22 DRM path
+
+on:
+  push:
+    branches: ["feat/tvdrm-player-integration-20261004"]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe SCTV22 direct and proxy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +euo pipefail
+          ENTRY='https://liveatmvng.vtvprime.vn/live/data8/SCTV22/Live_DASHDRM/SCTV22.mpd'
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          echo "===== DIRECT MPD ====="
+          curl -L --max-time 25 -sS -D /tmp/dh -o /tmp/dmpd -A "Dalvik/2.1.0" "$ENTRY"
+          echo "HTTP=$(grep -m1 -E '^HTTP/' /tmp/dh | tail -1)"
+          echo "FINAL=$(grep -i '^location:' /tmp/dh | tail -1 | sed 's/\r//')"
+          echo "BYTES=$(wc -c < /tmp/dmpd)"
+          python3 - /tmp/dmpd <<'PY'
+          import sys,xml.etree.ElementTree as ET
+          b=open(sys.argv[1],'rb').read()
+          if not b.lstrip().startswith(b'<'): print("NOT_XML",b[:300]); raise SystemExit
+          root=ET.fromstring(b);ns={'d':'urn:mpeg:dash:schema:mpd:2011'}
+          print("TYPE",root.attrib.get('type'),"UPDATE",root.attrib.get('minimumUpdatePeriod'),"TSBD",root.attrib.get('timeShiftBufferDepth'))
+          for a in root.findall('.//d:AdaptationSet',ns):
+            print("ADAPT",a.attrib.get('contentType'),a.attrib.get('mimeType'),a.attrib.get('codecs'),"REPS",len(a.findall('d:Representation',ns)),"CP",len(a.findall('d:ContentProtection',ns)))
+          PY
+          echo "===== PROXY MPD ====="
+          ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$ENTRY")"
+          curl -L --max-time 25 -sS -D /tmp/ph -o /tmp/pmpd -A "Dalvik/2.1.0" "$BASE/api/stream?u=$ENC"
+          echo "HTTP=$(grep -m1 -E '^HTTP/' /tmp/ph | tail -1)"
+          echo "BYTES=$(wc -c < /tmp/pmpd)"
+          python3 - /tmp/pmpd <<'PY'
+          import sys,xml.etree.ElementTree as ET, re
+          b=open(sys.argv[1],'rb').read()
+          if not b.lstrip().startswith(b'<'): print("NOT_XML",b[:500]); raise SystemExit
+          root=ET.fromstring(b);ns={'d':'urn:mpeg:dash:schema:mpd:2011'}
+          base=root.find('d:BaseURL',ns)
+          print("BASEURL",base.text.strip() if base is not None and base.text else "")
+          print("TYPE",root.attrib.get('type'),"UPDATE",root.attrib.get('minimumUpdatePeriod'))
+          for a in root.findall('.//d:AdaptationSet',ns):
+            st=(a.find('d:SegmentTemplate',ns))
+            if st is None:
+              for rep in a.findall('d:Representation',ns):
+                st=rep.find('d:SegmentTemplate',ns)
+                if st is not None: break
+            print("ADAPT",a.attrib.get('contentType'),"TEMPLATE",st.attrib if st is not None else None)
+          PY
+
+      - name: Inspect SCTV22 KIDs over live refresh
+        if: always()
+        shell: bash
+        run: |
+          set +euo pipefail
+          ENTRY='https://liveatmvng.vtvprime.vn/live/data8/SCTV22/Live_DASHDRM/SCTV22.mpd'
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$ENTRY")"
+          for n in 1 2 3 4; do
+            echo "===== REFRESH $n ====="
+            curl -sS --max-time 20 -o "/tmp/s$n.mpd" "$BASE/api/stream?u=$ENC"
+            python3 "/tmp/s$n.mpd" <<'PY'
+          PY
+            python3 - "/tmp/s$n.mpd" <<'PY'
+          import sys,re,xml.etree.ElementTree as ET,hashlib
+          b=open(sys.argv[1],'rb').read()
+          root=ET.fromstring(b);ns={'d':'urn:mpeg:dash:schema:mpd:2011'}
+          print("TYPE",root.attrib.get('type'),"UPDATE",root.attrib.get('minimumUpdatePeriod'),"AST",root.attrib.get('availabilityStartTime'))
+          kids=[]
+          for cp in root.findall('.//d:ContentProtection',ns):
+            for k,v in cp.attrib.items():
+              if 'default_KID' in k or 'default-kid' in k.lower() or 'kid'==k.lower():
+                kids.append(v)
+          print("KIDS",kids)
+          for a in root.findall('.//d:AdaptationSet',ns):
+            print("ADAPT",a.attrib.get('contentType'),a.attrib.get('mimeType'),a.attrib.get('codecs'))
+          PY
+            sleep 2
+          done
+
+      - name: Probe SCTV22 proxy with browser headers
+        if: always()
+        shell: bash
+        run: |
+          set +euo pipefail
+          ENTRY='https://liveatmvng.vtvprime.vn/live/data8/SCTV22/Live_DASHDRM/SCTV22.mpd'
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$ENTRY")"
+          for profile in 1 2 3 4; do
+            case "$profile" in
+              1) REF='https://vtvgo.vn/'; ORG='https://vtvgo.vn';;
+              2) REF='http://sctvonline.vn/'; ORG='http://sctvonline.vn';;
+              3) REF='https://sctvonline.vn/'; ORG='https://sctvonline.vn';;
+              4) REF=''; ORG='';;
+            esac
+            H=''
+            [ -n "$REF" ] && H="$H&r=$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$REF")"
+            [ -n "$ORG" ] && H="$H&h=$(python3 -c 'import urllib.parse,json,sys; print(urllib.parse.quote(json.dumps({"Origin":sys.argv[1]}),safe=""))' "$ORG")"
+            echo "=== PROFILE $profile ==="
+            curl -sS -L --max-time 25 -o "/tmp/p$profile" -w 'HTTP=%{http_code} BYTES=%{size_download}\n' -A "Dalvik/2.1.0" "$BASE/api/stream?u=$ENC$H"
+            head -c 120 /tmp/p$profile | tr '\n' ' '; echo
+          done
+
+      - name: Check published SCTV22 HLS candidates
+        shell: bash
+        run: |
+          set +euo pipefail
+          for U in \
+            'https://liveh34.vtvprime.vn/hls/SCTV22/04.m3u8' \
+            'https://e1.endpoint.cdn.sctvonline.vn/channel/sctv22/index.m3u8'
+          do
+            echo "=== $U ==="
+            curl -sS -L --max-time 20 -A "Mozilla/5.0" -e "https://sctvonline.vn/" -D /tmp/hls-h -o /tmp/hls-b "$U"
+            echo "HTTP=$(grep -m1 -E '^HTTP/' /tmp/hls-h | tail -1) BYTES=$(wc -c < /tmp/hls-b)"
+            head -c 200 /tmp/hls-b | tr '\n' ' '; echo
+          done
