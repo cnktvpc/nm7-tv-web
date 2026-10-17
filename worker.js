@@ -1456,7 +1456,7 @@ async function liveFeedResponse(request,env){
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}';
 const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1';
-const LIVE_PLAYER_INIT_RE=/S\\.zone=['"]player['"];\\$\\(['"]player['"]\\)\\.className=['"]{2};\\$\\(['"]ctrl['"]\\)\\.className=['"]hidden['"];\\$\\(['"]quick['"]\\)\\.className=['"]hidden['"];updatePlayerFullscreenButton\\(\\);showPlayerFullscreenButton\\(\\);/;
+const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*['"]{2};\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 function noCacheResponseHeaders(sourceHeaders){
  const headers=new Headers(sourceHeaders||{});
  headers.delete('Content-Length');headers.delete('Content-Encoding');headers.delete('ETag');headers.delete('Last-Modified');
@@ -1468,11 +1468,11 @@ async function liveOverlayHtmlResponse(response){
  if(!response||!response.ok)return response;
  let html=await response.text();
  if(!html.includes(LIVE_PLAYER_OVERLAY_CSS)){
-  if(/<\\/style>/i.test(html))html=html.replace(/<\\/style>/i,LIVE_PLAYER_OVERLAY_CSS+'\\n</style>');
-  else if(/<\\/head>/i.test(html))html=html.replace(/<\\/head>/i,'<style>'+LIVE_PLAYER_OVERLAY_CSS+'</style>\\n</head>');
+  if(/<\/style>/i.test(html))html=html.replace(/<\/style>/i,LIVE_PLAYER_OVERLAY_CSS+'\n</style>');
+  else if(/<\/head>/i.test(html))html=html.replace(/<\/head>/i,'<style>'+LIVE_PLAYER_OVERLAY_CSS+'</style>\n</head>');
   else return new Response('LIVE overlay preview failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  }
- html=html.replace(/app-safari-policy-mobile-controls\\.js(?:\\?v=[^"'\\s>]*)?/g,LIVE_PLAYER_OVERLAY_SCRIPT_URL);
+ html=html.replace(/app-safari-policy-mobile-controls\.js(?:\?v=[^"'\s>]*)?/g,LIVE_PLAYER_OVERLAY_SCRIPT_URL);
  return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 async function liveOverlayScriptResponse(response){
