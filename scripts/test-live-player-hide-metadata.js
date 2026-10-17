@@ -26,7 +26,7 @@ assert.match(
 );
 assert.doesNotMatch(
   html,
-  /#playerTop\s*\{\s*display:none!important;\s*\}/,
+  /^#playerTop\s*\{\s*display:none!important;\s*\}/m,
   'Do not globally hide player metadata for non-LIVE channels'
 );
 
