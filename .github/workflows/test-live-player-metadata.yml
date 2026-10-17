@@ -6,7 +6,19 @@ on:
       - fix/live-player-hide-title-source-20261018
     paths:
       - "web-tv/app.js"
+      - "web-tv/app-safari-policy-mobile-controls.js"
       - "web-tv/index.html"
+      - "worker.js"
+      - "scripts/test-live-player-hide-metadata.js"
+      - ".github/workflows/test-live-player-metadata.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "web-tv/app.js"
+      - "web-tv/app-safari-policy-mobile-controls.js"
+      - "web-tv/index.html"
+      - "worker.js"
       - "scripts/test-live-player-hide-metadata.js"
       - ".github/workflows/test-live-player-metadata.yml"
   workflow_dispatch:
@@ -25,7 +37,8 @@ jobs:
           persist-credentials: false
 
       - name: Check JavaScript syntax
-        run: node --check web-tv/app.js
+        run: |
+          node --check web-tv/app.js
           node --check web-tv/app-safari-policy-mobile-controls.js
           node --input-type=module --check < worker.js
 
