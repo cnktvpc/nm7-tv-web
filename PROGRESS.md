@@ -922,13 +922,14 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 
 ---
 
-## 2026-10-18 — candidate: hide team name and source URL during LIVE playback
+## 2026-10-18 — official release: hide team title and source URL for LIVE playback
 
-- Requested issue: when opening a match from the LIVE section, the team name and source URL were visible at the upper-left of the player and covered the broadcast picture.
-- Root cause in the current source: `openPlayer(c)` always populated `#playerTitle` from `c.name` and `#playerMeta` from `c.url`; the top metadata strip was shown for all playback contexts.
-- Fix on isolated branch `fix/live-player-hide-title-source-20261018`: `openPlayer` sets class `live-playback` when `S.livePlaybackContext` is active; `web-tv/index.html` uses `#player.live-playback #playerTop{display:none!important;}`.
-- Normal channel playback keeps the existing metadata strip. No stream URL, live feed logic, playlist routing, player controls, or Worker logic was changed.
-- Added `scripts/test-live-player-hide-metadata.js` and isolated workflow `.github/workflows/test-live-player-metadata.yml`.
-- Verification: JavaScript syntax PASS; the targeted LIVE-only metadata regression workflow PASS: [run #39053254347](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39053254347).
-- Other imported browser/HLS workflows were triggered by the `fix/**` branch and some fail in unrelated baseline checks (including a stale cache-buster assertion and the existing local HLS fixture/browser startup); these do not indicate that the targeted CSS/class regression failed.
-- Status: candidate only. Not merged to `main`; no Cloudflare Worker production deployment was run. Needs a preview/manual playback check before production promotion.
+- Request: remove the team/match title and stream URL that were permanently visible in the upper-left corner while watching a match from the LIVE section.
+- Source change merged to `main` in PR [#1](https://github.com/cnktvpc/nm7-tv-web/pull/1), merge commit `2eaca1ce2bc955603284648c2edb5496580e89d6`.
+- Player behavior: the player receives class `live-playback` only when the LIVE section opens the match; CSS hides `#playerTop` for that class only. Normal IPTV channels retain their title/source metadata and the controls/server picker are unchanged.
+- Cache version: `app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1`.
+- Added regression test `scripts/test-live-player-hide-metadata.js` and workflow `.github/workflows/test-live-player-metadata.yml`, including checks for the Worker response fallback that transforms existing deployed assets.
+- CI: targeted LIVE overlay regression PASS [run #39054612269](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39054612269); web browser validation PASS [run #39054612245](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39054612245).
+- Cloudflare production Worker `nm7-tv-web` successfully updated on 18/10/2026 (API deployment created 2026-10-17 17:39:59 UTC, local Vietnam time 18/10/2026 00:39:59). Active deployment `0197d45c-1df1-4f04-bc47-5bcb69dedc97`, version `9e0fdbe8-d890-4d12-941f-93805fa86014`, traffic 100%.
+- Confirmed preserved bindings: `ASSETS`, `PLAYLIST_SOURCE` → `phuongnm7-playlist`, and `THETHAO_SOURCE` → `thethaonm7`. Normal API/feed/playlist handlers remain intact.
+- Status: released to the existing production Worker. The isolated preview Worker remains available for comparison; this fix does not remove any watermark embedded in the broadcast video itself.
