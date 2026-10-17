@@ -7,23 +7,20 @@ const app = fs.readFileSync('web-tv/app.js', 'utf8');
 const activeApp = fs.readFileSync('web-tv/app-safari-policy-mobile-controls.js', 'utf8');
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
 
-const livePlayerClass = /S\\.zone='player';\\$\\('player'\\)\\.className=S\\.livePlaybackContext\\?'live-playback':'';/;
-assert.match(app, livePlayerClass, 'app.js source must mark LIVE playback');
-assert.match(activeApp, livePlayerClass, 'active browser runtime must mark LIVE playback');
+const liveClassMarker = "S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';";
+assert.ok(app.includes(liveClassMarker), 'app.js source must mark LIVE playback');
+assert.ok(activeApp.includes(liveClassMarker), 'active browser runtime must mark LIVE playback');
 
-assert.match(
-  html,
-  /#player\\.live-playback\\s+#playerTop\\s*\\{\\s*display:none!important;\\s*\\}/,
-  'LIVE player CSS must hide #playerTop'
+assert.ok(
+  html.includes('#player.live-playback #playerTop{display:none!important;}'),
+  'LIVE player CSS must hide #playerTop only in the LIVE playback context'
 );
-assert.match(
-  activeApp,
-  /\\$\\('playerTitle'\\)\\.textContent=c\\.name;\\$\\('playerMeta'\\)\\.textContent=c\\.url\\|\\|'';/,
+assert.ok(
+  activeApp.includes("$('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';"),
   'Regular player title/source metadata binding must remain available'
 );
-assert.doesNotMatch(
-  html,
-  /^#playerTop\\s*\\{\\s*display:none!important;\\s*\\}/m,
+assert.ok(
+  !html.includes('#playerTop{display:none!important;}'),
   'Do not globally hide player metadata for non-LIVE channels'
 );
 assert.ok(
