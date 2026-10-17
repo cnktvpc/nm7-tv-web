@@ -933,3 +933,17 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 - Cloudflare production Worker `nm7-tv-web` successfully updated on 18/10/2026 (API deployment created 2026-10-17 17:39:59 UTC, local Vietnam time 18/10/2026 00:39:59). Active deployment `0197d45c-1df1-4f04-bc47-5bcb69dedc97`, version `9e0fdbe8-d890-4d12-941f-93805fa86014`, traffic 100%.
 - Confirmed preserved bindings: `ASSETS`, `PLAYLIST_SOURCE` → `phuongnm7-playlist`, and `THETHAO_SOURCE` → `thethaonm7`. Normal API/feed/playlist handlers remain intact.
 - Status: released to the existing production Worker. The isolated preview Worker remains available for comparison; this fix does not remove any watermark embedded in the broadcast video itself.
+
+
+---
+
+## 2026-10-18 — production hotfix 2: PC/mobile player overlay
+
+- User reported the official production site still showed the team title and source URL after the first release, while the isolated test Worker hid them.
+- Patched the deployed Worker to rewrite both the mobile-controls and PC-controls JavaScript assets. HTML script references are now cache-busted for whichever runtime is active.
+- The active player class now uses (S.livePlaybackContext||S.liveSectionActive)?'live-playback':'' so the overlay is hidden when the LIVE tab is active even if an older event integration does not set livePlaybackContext.
+- New cache-buster: 20261018-live-hide-overlay2.
+- Cloudflare production deployment: cf99b603-8ac0-4cc2-ac66-d03fd4e16bbb; version e5a003e3-ae20-45d4-b1e7-cab737cfc807; 100% of traffic.
+- Verified the existing ASSETS, PLAYLIST_SOURCE, and THETHAO_SOURCE bindings and confirmed the deployed code still contains the LIVE feed and playlist route handlers.
+- GitHub source and tests updated in branch fix/live-overlay-production-runtime-fallback-20261018. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39055466718.
+- Manual production playback should be checked with a hard refresh so the browser fetches the new overlay2 runtime. This release changes only the NM7 web-player UI and does not remove watermark text embedded in the video itself.
