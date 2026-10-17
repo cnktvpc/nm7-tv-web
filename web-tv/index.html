@@ -124,6 +124,8 @@ body.tv-spatial #homeRows{overscroll-behavior:contain}
 #status{position:absolute;z-index:3;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#c5cad1;font-size:26px;padding:70px;pointer-events:none;white-space:pre-wrap;text-shadow:0 2px 8px #000}
 #officialBtn{position:absolute;z-index:6;left:50%;top:62%;transform:translate(-50%,-50%);font-size:20px;padding:13px 22px}
 #playerTop{position:absolute;left:0;right:0;top:0;z-index:4;padding:22px 32px;background:linear-gradient(#000d,transparent);pointer-events:none}
+/* LIVE stream overlay should not duplicate team title/source URL over the broadcast video. Normal channel playback keeps the metadata bar. */
+#player.live-playback #playerTop{display:none!important;}
 #playerTitle{font-size:25px;font-weight:700}
 #playerMeta{font-size:15px;color:#9ea8b5;margin-top:5px;word-break:break-all}
 #ctrl{position:absolute;z-index:25;left:50%;bottom:44px;transform:translateX(-50%);background:#10141aed;padding:12px 14px;border-radius:12px;display:flex;gap:9px;white-space:nowrap;pointer-events:auto;isolation:isolate}
@@ -347,7 +349,7 @@ body.mobile-mode #playerTop{padding-right:calc(64px + env(safe-area-inset-right,
 <script src="./youtube.js?v=20261006-youtube-original1"></script>
 <script src="./mobile-background.js?v=20261006-bg1"></script>
 <script src="./live-core-livefix-20261014.js"></script>
-<script src="./app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1"></script>
+<script src="./app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1"></script>
 <script src="./live-ui-livefix-20261014.js"></script>
 </body>
 </html>

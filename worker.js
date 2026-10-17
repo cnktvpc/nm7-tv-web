@@ -1453,4 +1453,38 @@ async function liveFeedResponse(request,env){
   }))});
 }
 
-export default {async fetch(request,env){const url=new URL(request.url),p=url.pathname,q=url.searchParams;if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(new Headers())});try{if(p==='/api/live-feed')return liveFeedResponse(request,env);if(p==='/api/news/play')return newsPlayResponse(url);if(p==='/api/news')return newsResponse(url);if(p==='/api/playlist')return playlistResponse(q.get('source')||'tv',q.get('default')||'',env,q.get('refresh')==='1');if(p.startsWith('/api/dash-resource/'))return dashResourceResponse(request,url);if(p==='/api/source')return sourceResponse(q,env);if(p==='/api/stream')return streamResponse(request,q);if(p==='/api/image')return imageResponse(q);if(p==='/api/license')return licenseResponse(request,q);if(p==='/api/probe')return probeResponse(request,q);if(p==='/'||p==='/tv'){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));const h=new Headers(page.headers);h.set('Cache-Control','no-store, no-cache, must-revalidate');h.set('Pragma','no-cache');h.set('Expires','0');return new Response(page.body,{status:page.status,statusText:page.statusText,headers:h});}if(p.startsWith('/web-tv/'))return env.ASSETS.fetch(new Request(new URL(p.replace(/^\/web-tv\//,'/'),request.url),request));return env.ASSETS.fetch(request)}catch(e){return new Response(JSON.stringify({error:'worker error',message:String(e?.message||e)}),{status:502,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}})}}};
+
+const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1';
+const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*['"]{2};\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
+function noCacheResponseHeaders(sourceHeaders){
+ const headers=new Headers(sourceHeaders||{});
+ headers.delete('Content-Length');headers.delete('Content-Encoding');headers.delete('ETag');headers.delete('Last-Modified');
+ headers.set('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+ headers.set('Pragma','no-cache');
+ return headers;
+}
+async function liveOverlayHtmlResponse(response){
+ if(!response||!response.ok)return response;
+ let html=await response.text();
+ if(!html.includes(LIVE_PLAYER_OVERLAY_CSS)){
+  if(/<\/style>/i.test(html))html=html.replace(/<\/style>/i,LIVE_PLAYER_OVERLAY_CSS+'\n</style>');
+  else if(/<\/head>/i.test(html))html=html.replace(/<\/head>/i,'<style>'+LIVE_PLAYER_OVERLAY_CSS+'</style>\n</head>');
+  else return new Response('LIVE overlay preview failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+ }
+ html=html.replace(/app-safari-policy-mobile-controls\.js(?:\?v=[^"'\s>]*)?/g,LIVE_PLAYER_OVERLAY_SCRIPT_URL);
+ return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
+}
+async function liveOverlayScriptResponse(response){
+ if(!response||!response.ok)return response;
+ const js=await response.text();
+ const marker="S.livePlaybackContext?'live-playback':''";
+ let fixed=js;
+ if(!fixed.includes(marker)){
+  if(!LIVE_PLAYER_INIT_RE.test(fixed))return new Response('LIVE overlay preview failed: could not locate the active player initialization.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+  fixed=fixed.replace(LIVE_PLAYER_INIT_RE,"S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();");
+ }
+ return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
+}
+
+export default {async fetch(request,env){const url=new URL(request.url),p=url.pathname,q=url.searchParams;if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(new Headers())});try{if(p==='/api/live-feed')return liveFeedResponse(request,env);if(p==='/api/news/play')return newsPlayResponse(url);if(p==='/api/news')return newsResponse(url);if(p==='/api/playlist')return playlistResponse(q.get('source')||'tv',q.get('default')||'',env,q.get('refresh')==='1');if(p.startsWith('/api/dash-resource/'))return dashResourceResponse(request,url);if(p==='/api/source')return sourceResponse(q,env);if(p==='/api/stream')return streamResponse(request,q);if(p==='/api/image')return imageResponse(q);if(p==='/api/license')return licenseResponse(request,q);if(p==='/api/probe')return probeResponse(request,q);if(p==='/'||p==='/tv'){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));const h=new Headers(page.headers);h.set('Cache-Control','no-store, no-cache, must-revalidate');h.set('Pragma','no-cache');h.set('Expires','0');return liveOverlayHtmlResponse(new Response(page.body,{status:page.status,statusText:page.statusText,headers:h}));}if(p==='/app-safari-policy-mobile-controls.js'&&request.method==='GET')return liveOverlayScriptResponse(await env.ASSETS.fetch(request));if(p.startsWith('/web-tv/')){const assetPath=p.replace(/^\/web-tv\//,'/');const assetRequest=new Request(new URL(assetPath,request.url),request);const asset=await env.ASSETS.fetch(assetRequest);if(request.method==='GET'&&assetPath==='/index.html')return liveOverlayHtmlResponse(asset);if(request.method==='GET'&&assetPath==='/app-safari-policy-mobile-controls.js')return liveOverlayScriptResponse(asset);return asset;}return env.ASSETS.fetch(request)}catch(e){return new Response(JSON.stringify({error:'worker error',message:String(e?.message||e)}),{status:502,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}})}}};
