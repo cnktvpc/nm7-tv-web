@@ -378,10 +378,12 @@ URL preview: https://nm7-tv-web-news-preview.phuongnm7-iptv.workers.dev/ban-tin.
 - Mã đã commit trên nhánh stable. Chưa đánh dấu production hoàn tất trước khi workflow Cloudflare chạy xanh và xác minh hai preset mặc định trả danh sách kênh hợp lệ.
 
 
-## Candidate fix — hide LIVE match title/source overlay (2026-10-18)
+## Released 18/10/2026 — hide match title and source URL during LIVE playback
 
-- Branch: `fix/live-player-hide-title-source-20261018`.
-- While playback is opened from the LIVE event list, the player now receives a `live-playback` class and hides `#playerTop` (team/title and source URL) only for this LIVE playback context.
-- Regular IPTV channel playback keeps the existing title/source metadata behavior.
-- Regression workflow: [Test NM7 TV Web LIVE player metadata hide](https://github.com/cnktvpc/nm7-tv-web/actions/workflows/test-live-player-metadata.yml) — PASS for the candidate branch.
-- Scope is the web player only. `main` and the active Cloudflare Worker have not been changed/deployed. Broad legacy browser workflows from the imported source snapshot have unrelated pre-existing failures and are not treated as passed.
+- Standard release merged into `main` by PR [#1](https://github.com/cnktvpc/nm7-tv-web/pull/1), merge commit `2eaca1ce2bc955603284648c2edb5496580e89d6`.
+- When a match is opened from the LIVE section, the player now hides `#playerTop`, the UI strip that displayed the match/team title and stream URL over the video.
+- The fix is scoped to LIVE playback. Ordinary IPTV channel playback keeps its title/source metadata, and the existing player controls and LIVE server picker are unchanged.
+- The active runtime is versioned as `app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay1`; Worker-side response rewriting covers the already-deployed asset set and is safe when the updated source assets are later deployed normally.
+- Production Cloudflare Worker `nm7-tv-web` has been updated successfully; latest deployment version `9e0fdbe8-d890-4d12-941f-93805fa86014`, serving 100% traffic. Existing `ASSETS`, `PLAYLIST_SOURCE`, and `THETHAO_SOURCE` bindings were preserved.
+- Verification: targeted LIVE overlay regression [PASS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39054612269) and browser validation [PASS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39054612245).
+- The production site is [nm7-tv-web.phuongnm7-iptv.workers.dev](https://nm7-tv-web.phuongnm7-iptv.workers.dev/). Provider-burned watermark/text that is already part of the video itself is outside the web-player overlay fix.
