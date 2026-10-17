@@ -918,3 +918,17 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 - Default 2 tiếp tục dùng URL Worker mặc định hiện có: `https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/`; fallback vẫn là `https://iptv-live-merge.phuongnm7-iptv.workers.dev/playlist.m3u`.
 - Cập nhật smoke test theo nhóm thực tế của danh mục đang sinh động; xác minh nhóm TV/VTVcab/Thể Thao/SCTV và các luồng DASH/ClearKey SCTV15, SCTV17, SCTV22.
 - Mã đã commit trên nhánh stable. Chưa đánh dấu production hoàn tất trước khi workflow Cloudflare chạy xanh và xác minh hai preset mặc định trả danh sách kênh hợp lệ.
+
+
+---
+
+## 2026-10-18 — candidate: hide team name and source URL during LIVE playback
+
+- Requested issue: when opening a match from the LIVE section, the team name and source URL were visible at the upper-left of the player and covered the broadcast picture.
+- Root cause in the current source: `openPlayer(c)` always populated `#playerTitle` from `c.name` and `#playerMeta` from `c.url`; the top metadata strip was shown for all playback contexts.
+- Fix on isolated branch `fix/live-player-hide-title-source-20261018`: `openPlayer` sets class `live-playback` when `S.livePlaybackContext` is active; `web-tv/index.html` uses `#player.live-playback #playerTop{display:none!important;}`.
+- Normal channel playback keeps the existing metadata strip. No stream URL, live feed logic, playlist routing, player controls, or Worker logic was changed.
+- Added `scripts/test-live-player-hide-metadata.js` and isolated workflow `.github/workflows/test-live-player-metadata.yml`.
+- Verification: JavaScript syntax PASS; the targeted LIVE-only metadata regression workflow PASS: [run #39053254347](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39053254347).
+- Other imported browser/HLS workflows were triggered by the `fix/**` branch and some fail in unrelated baseline checks (including a stale cache-buster assertion and the existing local HLS fixture/browser startup); these do not indicate that the targeted CSS/class regression failed.
+- Status: candidate only. Not merged to `main`; no Cloudflare Worker production deployment was run. Needs a preview/manual playback check before production promotion.
