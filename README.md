@@ -376,3 +376,12 @@ URL preview: https://nm7-tv-web-news-preview.phuongnm7-iptv.workers.dev/ban-tin.
 - Default 2 tiếp tục dùng URL Worker mặc định hiện có: `https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/`; fallback vẫn là `https://iptv-live-merge.phuongnm7-iptv.workers.dev/playlist.m3u`.
 - Cập nhật smoke test theo nhóm thực tế của danh mục đang sinh động; xác minh nhóm TV/VTVcab/Thể Thao/SCTV và các luồng DASH/ClearKey SCTV15, SCTV17, SCTV22.
 - Mã đã commit trên nhánh stable. Chưa đánh dấu production hoàn tất trước khi workflow Cloudflare chạy xanh và xác minh hai preset mặc định trả danh sách kênh hợp lệ.
+
+
+## Candidate fix — hide LIVE match title/source overlay (2026-10-18)
+
+- Branch: `fix/live-player-hide-title-source-20261018`.
+- While playback is opened from the LIVE event list, the player now receives a `live-playback` class and hides `#playerTop` (team/title and source URL) only for this LIVE playback context.
+- Regular IPTV channel playback keeps the existing title/source metadata behavior.
+- Regression workflow: [Test NM7 TV Web LIVE player metadata hide](https://github.com/cnktvpc/nm7-tv-web/actions/workflows/test-live-player-metadata.yml) — PASS for the candidate branch.
+- Scope is the web player only. `main` and the active Cloudflare Worker have not been changed/deployed. Broad legacy browser workflows from the imported source snapshot have unrelated pre-existing failures and are not treated as passed.
