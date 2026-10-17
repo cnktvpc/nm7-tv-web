@@ -387,3 +387,13 @@ URL preview: https://nm7-tv-web-news-preview.phuongnm7-iptv.workers.dev/ban-tin.
 - Production Cloudflare Worker `nm7-tv-web` has been updated successfully; latest deployment version `9e0fdbe8-d890-4d12-941f-93805fa86014`, serving 100% traffic. Existing `ASSETS`, `PLAYLIST_SOURCE`, and `THETHAO_SOURCE` bindings were preserved.
 - Verification: targeted LIVE overlay regression [PASS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39054612269) and browser validation [PASS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39054612245).
 - The production site is [nm7-tv-web.phuongnm7-iptv.workers.dev](https://nm7-tv-web.phuongnm7-iptv.workers.dev/). Provider-burned watermark/text that is already part of the video itself is outside the web-player overlay fix.
+
+
+## Production follow-up released — PC/mobile LIVE overlay fallback (2026-10-18)
+
+- Follow-up deployed after the first production check still showed the overlay in the desktop player.
+- The production Worker now rewrites both app-safari-policy-mobile-controls.js and app-safari-policy-pc-controls.js, using cache-busters ending in 20261018-live-hide-overlay2.
+- LIVE playback is detected from S.livePlaybackContext or S.liveSectionActive; this covers older LIVE UI state that did not populate the playback context expected by the first patch.
+- Production deployment on Worker nm7-tv-web: deployment cf99b603-8ac0-4cc2-ac66-d03fd4e16bbb, version e5a003e3-ae20-45d4-b1e7-cab737cfc807, 100% traffic. Existing ASSETS, PLAYLIST_SOURCE, and THETHAO_SOURCE bindings verified unchanged.
+- API verification confirmed the new PC/mobile cache-busters, LIVE state fallback, PC asset route, and existing API live-feed and playlist handlers in the deployed Worker bundle.
+- Source changes and regression coverage are on branch fix/live-overlay-production-runtime-fallback-20261018; the dedicated browser validation workflow passed on the branch before final documentation updates.

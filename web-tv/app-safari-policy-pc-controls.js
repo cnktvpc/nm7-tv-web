@@ -831,7 +831,7 @@ function openPlayer(c){
  c=sanitizeAppleCandidates(c);
  if(!c||!c.candidates||!c.candidates.length){toast('Kênh chưa có URL phát');return}
  S.current=c;S.candidateIndex=startupCandidateIndex(c);S.attemptStep=0;if(S.livePlaybackContext&&window.NM7LiveUI&&window.NM7LiveUI.onPlayerStarted)window.NM7LiveUI.onPlayerStarted(String(c.liveEventId||c.id||''));S.proxyAttempt=false;S.retryPending=false;S.player=true;S.drmRecoveryCount=0;S.drmHardRecoveryCount=0;S.drmStallAnchor=0;S.drmStallSince=0;S.audioMutedByPolicy=false;S.ctrl=false;S.quick=false;S.generation++;
- S.zone='player';$('player').className='';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();
+ S.zone='player';$('player').className=(S.livePlaybackContext||S.liveSectionActive)?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();
  var liveServerButton=$('liveServerBtn');if(liveServerButton)liveServerButton.className=S.livePlaybackContext?'cb':'cb hidden';
  $('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';
  if(!S.livePlaybackContext){S.recent=[c.id].concat(S.recent.filter(function(x){return x!==c.id})).slice(0,80);saveUser()}tryCandidate()

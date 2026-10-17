@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/live-player-hide-title-source-20261018
+      - fix/live-overlay-production-runtime-fallback-20261018
     paths:
       - "web-tv/app.js"
       - "web-tv/app-safari-policy-mobile-controls.js"
@@ -40,6 +41,7 @@ jobs:
         run: |
           node --check web-tv/app.js
           node --check web-tv/app-safari-policy-mobile-controls.js
+          node --check web-tv/app-safari-policy-pc-controls.js
           node --input-type=module --check < worker.js
 
       - name: Verify LIVE-only metadata hiding
