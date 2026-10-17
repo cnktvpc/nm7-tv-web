@@ -1,0 +1,31 @@
+name: Test NM7 TV Web LIVE player metadata hide
+
+on:
+  push:
+    branches:
+      - fix/live-player-hide-title-source-20261018
+    paths:
+      - "web-tv/app.js"
+      - "web-tv/index.html"
+      - "scripts/test-live-player-hide-metadata.js"
+      - ".github/workflows/test-live-player-metadata.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Check JavaScript syntax
+        run: node --check web-tv/app.js
+
+      - name: Verify LIVE-only metadata hiding
+        run: node scripts/test-live-player-hide-metadata.js
