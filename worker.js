@@ -1459,7 +1459,7 @@ async function fetchStaticAsset(request, assetPath) {
  let repoPath;
  if(pathname==='/manifest.webmanifest')repoPath='/manifest.webmanifest';
  else {
-  const clean=pathname.replace(/^\\/web-tv\\//,'/').replace(/^\\/+/, '');
+  let clean=pathname; if(clean.startsWith('/web-tv/'))clean=clean.slice(7); while(clean.startsWith('/'))clean=clean.slice(1);
   repoPath='/web-tv/'+clean;
  }
  if(pathname==='/'||pathname==='/tv'||pathname==='/index.html')repoPath='/web-tv/index.html';
