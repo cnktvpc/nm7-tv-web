@@ -1472,6 +1472,11 @@ async function fetchStaticAsset(request, assetPath) {
    const retry=await fetch(fallback,{headers:{'User-Agent':'Mozilla/5.0 NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
    if(retry.ok)upstream=retry;
   }
+  if(!upstream.ok){
+   const apiUrl='https://api.github.com/repos/cnktvpc/nm7-tv-web/contents'+repoPath+'?ref=main';
+   const api=await fetch(apiUrl,{headers:{'User-Agent':'NM7-TV-Web/1.0.69','Accept':'application/vnd.github.raw','X-GitHub-Api-Version':'2022-11-28'},redirect:'follow'});
+   if(api.ok)upstream=api;
+  }
  } catch(error) {
   return new Response('NM7 static asset upstream unavailable: '+String(error&&error.message||error),{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  }
