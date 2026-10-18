@@ -11,7 +11,7 @@ const worker = fs.readFileSync('worker.js', 'utf8');
 const page = fs.readFileSync('web-tv/ban-tin.html', 'utf8');
 
 assert.ok(html.includes('id="btnNewsTab"'), 'Home screen must render the Bản tin button');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261014-mobile-autohide1'),
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay5'),
   'Home page must load the active player script with a cache-busting query');
 assert.ok(activeScript.includes("$('btnNewsTab').addEventListener('click',function(){location.href='/ban-tin.html';});"),
   'The script actually loaded by index.html must bind the home Bản tin button');
