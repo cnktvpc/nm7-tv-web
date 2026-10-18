@@ -1,0 +1,67 @@
+name: Temporary NM7 static assets upload
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/nm7-upload-restore-assets.yml"
+permissions:
+  contents: read
+jobs:
+  upload-assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Upload the complete static asset bundle through the relay
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, mimetypes, pathlib, urllib.request, urllib.error
+          manifest=json.loads(r'''{"/app-safari-policy-mobile-controls.js":{"hash":"e65afe6515127910c4fea4f7025aa6b9","size":106623},"/app-safari-policy-pc-controls.js":{"hash":"e65afe6515127910c4fea4f7025aa6b9","size":106623},"/app-safari-policy.js":{"hash":"725b9e461ad0a1f7dd049a9b74bcfcd4","size":105893},"/app.js":{"hash":"6faf29883bc06e02419ef4424a863070","size":105868},"/assets/nm7-default-background.webp":{"hash":"d8af6ac8ba532db465dcb8c44e00b718","size":1294528},"/assets/nm7-main-logo.png":{"hash":"17e2cd6434e46cc605d95552c46aabfd","size":338140},"/ban-tin.html":{"hash":"21633f36428d34b4ba67318f9dd73e4e","size":12847},"/dash.all.min.js":{"hash":"f7f8d890b91b93f1e1b96b9fb8f9f3a4","size":585216},"/index.html":{"hash":"e04f95b519fcfe83215e300a1a41cfca","size":29417},"/live-core-livefix-20261014.js":{"hash":"cf5a2071fd0fa548b8af113ce08fd6cb","size":14873},"/live-core.js":{"hash":"cf5a2071fd0fa548b8af113ce08fd6cb","size":14873},"/live-ui-livefix-20261014.js":{"hash":"d1c735f01dfca86b2cac0edbb9e79828","size":15404},"/live.js":{"hash":"d1c735f01dfca86b2cac0edbb9e79828","size":15404},"/mobile-background.js":{"hash":"f1a65021c915e26990946b1c5a18587e","size":7373},"/playlist.json":{"hash":"56182cc7b15292e93c2b9261e81af35e","size":125964},"/youtube.js":{"hash":"dbac9ecd8a0703d3b4e181acebc229e6","size":1148}}''')
+          buckets=json.loads(r'''[["dbac9ecd8a0703d3b4e181acebc229e6","cf5a2071fd0fa548b8af113ce08fd6cb","6faf29883bc06e02419ef4424a863070","56182cc7b15292e93c2b9261e81af35e","d8af6ac8ba532db465dcb8c44e00b718"],["f1a65021c915e26990946b1c5a18587e","d1c735f01dfca86b2cac0edbb9e79828","725b9e461ad0a1f7dd049a9b74bcfcd4","17e2cd6434e46cc605d95552c46aabfd"],["21633f36428d34b4ba67318f9dd73e4e","e04f95b519fcfe83215e300a1a41cfca","e65afe6515127910c4fea4f7025aa6b9","f7f8d890b91b93f1e1b96b9fb8f9f3a4"]]''')
+          root=pathlib.Path("web-tv")
+          by_hash={}
+          for p,meta in manifest.items():
+              by_hash.setdefault(meta["hash"],p)
+          completion=None
+          for num,bucket in enumerate(buckets,1):
+              boundary="NM7UPLOAD"+str(num)
+              parts=[]
+              for h in bucket:
+                  asset_path=by_hash[h]
+                  p=root / asset_path.lstrip("/")
+                  raw=p.read_bytes()
+                  actual=hashlib.sha256(raw).hexdigest()[:32]
+                  if actual != h:
+                      raise SystemExit("HASH_MISMATCH "+asset_path+" expected="+h+" actual="+actual)
+                  if len(raw)!=manifest[asset_path]["size"]:
+                      raise SystemExit("SIZE_MISMATCH "+asset_path)
+                  mime=mimetypes.guess_type(p.name)[0] or "application/octet-stream"
+                  parts.append((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\"{h}\"; filename=\"{p.name}\"\\r\\nContent-Type: {mime}\\r\\n\\r\\n").encode())
+                  parts.append(base64.b64encode(raw))
+                  parts.append(b"\\r\\n")
+              parts.append(f"--{boundary}--\\r\\n".encode())
+              body=b"".join(parts)
+              req=urllib.request.Request(
+                  "https://nm7-static-assets-uploader.phuongnm7-iptv.workers.dev/upload?key=nm7-restore-20261018",
+                  data=body, method="POST",
+                  headers={"Content-Type":"multipart/form-data; boundary="+boundary}
+              )
+              try:
+                  with urllib.request.urlopen(req,timeout=120) as res:
+                      status,payload=res.status,res.read().decode("utf-8","replace")
+              except urllib.error.HTTPError as e:
+                  status,payload=e.code,e.read().decode("utf-8","replace")
+              print(f"NM7_BUCKET_{num}_HTTP={status} FILES={len(bucket)} RESPONSE={payload[:1200]}")
+              parsed=json.loads(payload)
+              if not parsed.get("success"):
+                  raise SystemExit("ASSET_UPLOAD_FAILED bucket="+str(num))
+              if parsed.get("result",{}).get("jwt"):
+                  completion=parsed["result"]["jwt"]
+          if not completion:
+              raise SystemExit("NO_ASSET_COMPLETION_JWT")
+          print("NM7_ASSET_COMPLETION_JWT_BEGIN")
+          print(completion)
+          print("NM7_ASSET_COMPLETION_JWT_END")
+          print("NM7_COMPLETE_ASSET_BUNDLE_UPLOADED")
+          PY
