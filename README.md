@@ -1,3 +1,16 @@
+# Cập nhật mới nhất — ẩn tiêu đề/URL nguồn khi xem IPTV và giữ nguyên LIVE (18/10/2026)
+
+- **Lỗi IPTV đã sửa:** khi xem kênh thông thường, thanh metadata do player tạo ra (tên kênh và URL nguồn ở phía trên video) được ẩn bằng selector `#player:not(.live-playback) #playerTop{display:none!important;}`.
+- **Không thay đổi phần LIVE:** giữ nguyên các selector `#player.live-playback #playerTop` và `#player.live-playback #playerTitle`; không sửa logic LIVE, nút đổi server hoặc nguồn playlist trong bản sửa IPTV này.
+- **Regression:** `scripts/test-live-player-hide-metadata.js` kiểm tra đồng thời selector IPTV mới và hai selector LIVE cũ. Các bước kiểm tra mã và regression trên nhánh sửa đều PASS.
+- **Đã merge vào main:** [PR #10](https://github.com/cnktvpc/nm7-tv-web/pull/10), commit [`a70c915e8c968623f175e08910e90b7a04fd781d`](https://github.com/cnktvpc/nm7-tv-web/commit/a70c915e8c968623f175e08910e90b7a04fd781d).
+- **Xác nhận production sau deploy:** [Production LIVE/overlay smoke #39108104927 — SUCCESS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39108104927) và [validation #39108104998 — SUCCESS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39108104998). HTML production chứa đủ selector IPTV/LIVE; runtime mobile và PC vẫn có trạng thái `live-playback`. Cloudflare Worker production được cập nhật lên version 467, nhận 100% lưu lượng.
+- **Phạm vi:** chỉ NM7 TV Web/Cloudflare. Không thay đổi NM7 TV Android hoặc NM7 Mobile.
+- **Ghi chú CI:** workflow deploy tổng thể đã deploy Worker thành công nhưng sau đó một smoke test nguồn TV preset 1 thất bại vì URL upstream thực tế khác URL GitHub được assertion cũ mong đợi. Đây là lỗi kiểm thử nguồn playlist riêng, không phải lỗi overlay; không thay đổi nguồn playlist trong PR #10.
+- **Production:** https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 # Cập nhật mới nhất — sửa player mobile: tự ẩn nút fullscreen, bỏ toast tua (14/10/2026)
 
 - Trên điện thoại/tablet, nút toàn màn hình tự ẩn sau 2,4 giây không thao tác; chạm hoặc di chuyển ngón tay trên player sẽ hiện lại và đặt lại thời gian.
