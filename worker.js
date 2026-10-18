@@ -1455,9 +1455,12 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay3';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay3';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay4';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
+const LIVE_PLAYER_TITLE_ASSIGN_RE=/\$\(\s*['"]playerTitle['"]\s*\)\.textContent\s*=\s*c\.name\s*;\s*\$\(\s*['"]playerMeta['"]\s*\)\.textContent\s*=\s*c\.url\s*\|\|\s*['"]{2}\s*;/;
+const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';var __nm7LiveOverlayTitleInitV4=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');$('player').className=__nm7LiveOverlayTitleInitV4?'live-playback':'';var __nm7LiveTopInitV4=$('playerTop');if(__nm7LiveTopInitV4)__nm7LiveTopInitV4.style.display=__nm7LiveOverlayTitleInitV4?'none':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
+const LIVE_PLAYER_TITLE_HIDE_INSERTION="var __nm7LiveTitleHideV4=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');var __nm7PlayerTitleV4=$('playerTitle');if(__nm7PlayerTitleV4)__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':'';var __nm7PlayerMetaV4=$('playerMeta');if(__nm7PlayerMetaV4)__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':'';var __nm7PlayerTopV4=$('playerTop');if(__nm7PlayerTopV4)__nm7PlayerTopV4.style.display=__nm7LiveTitleHideV4?'none':'';";
 function noCacheResponseHeaders(sourceHeaders){
  const headers=new Headers(sourceHeaders||{});
  headers.delete('Content-Length');headers.delete('Content-Encoding');headers.delete('ETag');headers.delete('Last-Modified');
@@ -1471,16 +1474,20 @@ async function liveOverlayHtmlResponse(response){
  if(!html.includes(LIVE_PLAYER_OVERLAY_CSS)){
   if(/<\/style>/i.test(html))html=html.replace(/<\/style>/i,LIVE_PLAYER_OVERLAY_CSS+'\n</style>');
   else if(/<\/head>/i.test(html))html=html.replace(/<\/head>/i,'<style>'+LIVE_PLAYER_OVERLAY_CSS+'</style>\n</head>');
-  else return new Response('LIVE overlay preview failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+  else return new Response('LIVE title overlay release failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
  }
  html=html.replace(/app-safari-policy-(mobile|pc)-controls\.js(?:\?v=[^"'\s>]*)?/g,(_,variant)=>variant==='pc'?LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL:LIVE_PLAYER_OVERLAY_SCRIPT_URL);
  return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 async function liveOverlayScriptResponse(response){
  if(!response||!response.ok)return response;
- const js=await response.text();
- if(!LIVE_PLAYER_INIT_RE.test(js))return new Response('LIVE overlay release failed: could not locate the active player initialization.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
- const fixed=js.replace(LIVE_PLAYER_INIT_RE,"S.zone='player';var __nm7LiveOverlay=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');$('player').className=__nm7LiveOverlay?'live-playback':'';var __nm7PlayerTop=$('playerTop');if(__nm7PlayerTop)__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();");
+ let fixed=await response.text();
+ if(LIVE_PLAYER_INIT_RE.test(fixed))fixed=fixed.replace(LIVE_PLAYER_INIT_RE,LIVE_PLAYER_INIT_REPLACEMENT);
+ if(!fixed.includes('__nm7LiveTitleHideV4')){
+  if(!LIVE_PLAYER_TITLE_ASSIGN_RE.test(fixed))return new Response('LIVE title overlay release failed: could not locate player title assignment in active runtime.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
+  fixed=fixed.replace(LIVE_PLAYER_TITLE_ASSIGN_RE,match=>match+LIVE_PLAYER_TITLE_HIDE_INSERTION);
+ }
+ if(!fixed.includes('__nm7PlayerTitleV4')||!fixed.includes("__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''"))return new Response('LIVE title overlay release failed: explicit title-hide marker missing.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
