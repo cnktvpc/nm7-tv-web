@@ -947,3 +947,13 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 - Verified the existing ASSETS, PLAYLIST_SOURCE, and THETHAO_SOURCE bindings and confirmed the deployed code still contains the LIVE feed and playlist route handlers.
 - GitHub source and tests updated in branch fix/live-overlay-production-runtime-fallback-20261018. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39055466718.
 - Manual production playback should be checked with a hard refresh so the browser fetches the new overlay2 runtime. This release changes only the NM7 web-player UI and does not remove watermark text embedded in the video itself.
+
+
+---
+
+## 2026-10-18 — fix candidate 3: explicitly hide player title container
+
+- Production screenshot after overlay2 showed that the source URL was hidden but the team title still remained, proving the CSS/class-only approach was not reliable for the actual production path.
+- Candidate branch `fix/live-title-explicit-hide-20261018` now identifies LIVE from multiple independent signals (`livePlaybackContext`, `liveSectionActive`, `liveEventId`, group `LIVE`, or source `live`) and sets `#playerTop.style.display='none'` directly at player initialization. When ordinary IPTV playback starts, the inline display is restored.
+- Worker response fallback now rewrites the initialization regardless of whether an older version marker is already present; runtime cache-buster updated to `20261018-live-hide-overlay3` for PC/mobile paths.
+- Targeted regression workflow expanded to assert the explicit container hide. Release remains pending tests and verification against production responses; overlay2 is not considered final.
