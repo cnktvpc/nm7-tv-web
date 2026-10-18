@@ -52,6 +52,7 @@ jobs:
           required = [
               '#player.live-playback #playerTop{display:none!important;}',
               '#player.live-playback #playerTitle{display:none!important;}',
+              '#player:not(.live-playback) #playerTop{display:none!important;}',
               'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6',
           ]
           missing = [marker for marker in required if marker not in html]
