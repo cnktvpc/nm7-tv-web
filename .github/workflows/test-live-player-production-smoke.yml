@@ -1,4 +1,4 @@
-# Production validation trigger: verify preserved assets and LIVE overlay route after deploy 2026-10-18; run 4.
+# Production validation trigger: verify preserved assets and LIVE overlay route after deploy 2026-10-18; run 3.
 name: NM7 TV Web Production LIVE title overlay smoke
 
 on:
@@ -28,9 +28,7 @@ jobs:
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
           CACHE="20261018-live-hide-overlay4"
-          curl -sSL -D /tmp/nm7-production-headers --max-time 30 "$BASE/?__nm7_live_title_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html || true
-          cat /tmp/nm7-production-headers
-          head -c 700 /tmp/nm7-production.html; echo
+          curl -fsSL --max-time 30 "$BASE/?__nm7_live_title_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html
           python3 - <<'PY'
           from pathlib import Path
           html=Path('/tmp/nm7-production.html').read_text(encoding='utf-8')
