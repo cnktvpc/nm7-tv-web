@@ -5,7 +5,7 @@ compatibility_date = "2026-10-04"
 [assets]
 directory = "./web-tv"
 binding = "ASSETS"
-run_worker_first = ["/", "/tv", "/index.html", "/app-safari-policy-mobile-controls.js", "/app-safari-policy-pc-controls.js", "/web-tv/*", "/api/*"]
+run_worker_first = ["/*"]
 
 [[services]]
 binding = "PLAYLIST_SOURCE"
