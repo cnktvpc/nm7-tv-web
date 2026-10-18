@@ -8,6 +8,7 @@ on:
       - fix/youtube-original-coccoc-adblock-20261006
       - fix/vtv1-single-source-hide-default-urls-20261009
       - stable/nm7-tv-web-2026-10-09
+      - main
   workflow_dispatch:
 
 concurrency:
