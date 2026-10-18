@@ -52,5 +52,15 @@ for (const [label, runtime] of [['original-empty-class', oldRuntime], ['previous
   assert.ok(patched.includes("String(S.source||'').toLowerCase()==='live'"), 'Worker rewrite must keep source-based LIVE detection for ' + label);
 }
 assert.ok(/className\s*=\s*[^;]+;/.test(worker), 'Worker initializer regex must match already-patched class expressions, not only an empty class');
+assert.ok(worker.includes('LIVE_PLAYER_TITLE_ASSIGN_RE'), 'Worker must locate title/source assignments in the active player runtime');
+assert.ok(worker.includes('LIVE_PLAYER_TITLE_HIDE_INSERTION'), 'Worker must explicitly patch title and source element visibility, not just the parent CSS class');
+assert.ok(worker.includes("__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''"), 'Worker must explicitly hide the playerTitle element for LIVE');
+assert.ok(worker.includes("__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':''"), 'Worker must explicitly hide the playerMeta element for LIVE');
+assert.ok(worker.includes('20261018-live-hide-overlay4'), 'Worker must use the new production cache-buster');
+const titleAssignPattern = /\$\(\s*['\"]playerTitle['\"]\s*\)\.textContent\s*=\s*c\.name\s*;\s*\$\(\s*['\"]playerMeta['\"]\s*\)\.textContent\s*=\s*c\.url\s*\|\|\s*['\"]{2}\s*;/;
+const titleSourceAssignment = "$('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';";
+assert.match(titleSourceAssignment, titleAssignPattern, 'Test fixture must match real player title and source assignment');
+const titleHideFixture = titleSourceAssignment + "var __nm7LiveTitleHideV4=!!S.livePlaybackContext;$('playerTitle').style.display=__nm7LiveTitleHideV4?'none':'';$('playerMeta').style.display=__nm7LiveTitleHideV4?'none':'';";
+assert.ok(titleHideFixture.includes("$('playerTitle').style.display=__nm7LiveTitleHideV4?'none':''"), 'LIVE title hide must operate on the exact title element');
 
 console.log('NM7_TV_WEB_LIVE_PLAYER_METADATA_HIDDEN_REGRESSION_OK');
