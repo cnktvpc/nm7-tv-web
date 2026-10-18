@@ -1,4 +1,4 @@
-name: Temporary NM7 production route diagnosis
+name: Temporary NM7 asset manifest generator
 
 on:
   push:
@@ -10,24 +10,25 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  manifest:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe production paths and overlay markers
+      - uses: actions/checkout@v6
+      - name: Generate Cloudflare static-assets manifest
         shell: bash
         run: |
-          set +e
-          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          for path in "/" "/?diag=1" "/index.html?diag=1" "/app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4&diag=1" "/app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay4&diag=1" "/assets/nm7-default-background.webp" "/web-tv/index.html?diag=1" "/api/playlist?source=tv&default=2"; do
-            echo "===== PATH $path ====="
-            out="$(mktemp)"
-            code="$(curl -sS --max-time 25 -o "$out" -w "%{http_code}" "$BASE$path")"
-            echo "STATUS=$code SIZE=$(wc -c < "$out")"
-            head -c 350 "$out" | tr '\n' ' '
-            echo
-            if grep -q 'player.live-playback #playerTop' "$out"; then echo "MARKER_HTML_CSS=YES"; fi
-            if grep -q '__nm7LiveTitleHideV4' "$out"; then echo "MARKER_JS_HIDE=YES"; fi
-            if grep -q '"channels"' "$out"; then echo "MARKER_PLAYLIST_JSON=YES"; fi
-            rm -f "$out"
-          done
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path("web-tv")
+          manifest = {}
+          for f in sorted(p for p in root.rglob("*") if p.is_file()):
+              data = f.read_bytes()
+              key = "/" + f.relative_to(root).as_posix()
+              manifest[key] = {"hash": hashlib.sha256(data).hexdigest()[:32], "size": len(data)}
+          print("NM7_ASSETS_MANIFEST_JSON_BEGIN")
+          print(json.dumps(manifest, separators=(",", ":")))
+          print("NM7_ASSETS_MANIFEST_JSON_END")
+          print("ASSET_COUNT", len(manifest), "TOTAL_BYTES", sum(x["size"] for x in manifest.values()))
+          PY
