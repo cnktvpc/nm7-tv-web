@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: nm7-cloudflare-deploy-${{ github.ref }}
+  group: nm7-cloudflare-deploy-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
