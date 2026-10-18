@@ -40,8 +40,8 @@ jobs:
       - name: Deploy official Worker and Static Assets with Wrangler
         uses: cloudflare/wrangler-action@v4
         with:
-          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: e8657c5bb3a292d9a2adfc5cffb7c95b
           command: deploy
 
       - name: Smoke test the actual production HTML and player runtimes
