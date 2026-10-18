@@ -39,4 +39,18 @@ assert.ok(
   'index.html must use a new cache-buster for the active runtime script'
 );
 
+// Exercise the same broad initializer pattern used by Worker-side rewriting,
+// including both the original empty class and the previous CSS-class-only patch.
+const initPattern = /S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
+const directHideReplacement = "S.zone='player';var __nm7LiveOverlay=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');$('player').className=__nm7LiveOverlay?'live-playback':'';var __nm7PlayerTop=$('playerTop');if(__nm7PlayerTop)__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
+const oldRuntime = "S.zone='player';$('player').className='';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
+const classOnlyRuntime = "S.zone='player';$('player').className=(S.livePlaybackContext||S.liveSectionActive)?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
+for (const [label, runtime] of [['original-empty-class', oldRuntime], ['previous-class-only-patch', classOnlyRuntime]]) {
+  assert.match(runtime, initPattern, 'Worker initializer matcher must cover ' + label);
+  const patched = runtime.replace(initPattern, directHideReplacement);
+  assert.ok(patched.includes("__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':''"), 'Worker rewrite must directly hide playerTop for ' + label);
+  assert.ok(patched.includes("String(S.source||'').toLowerCase()==='live'"), 'Worker rewrite must keep source-based LIVE detection for ' + label);
+}
+assert.ok(worker.includes("className\\\\s*=\\\\s*[^;]+;"), 'Worker initializer regex must match already-patched class expressions, not only an empty class');
+
 console.log('NM7_TV_WEB_LIVE_PLAYER_METADATA_HIDDEN_REGRESSION_OK');
