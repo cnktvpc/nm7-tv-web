@@ -1,4 +1,4 @@
-# Production validation trigger: verify preserved assets and LIVE overlay route after deploy 2026-10-18.
+# Production validation trigger: verify preserved assets and LIVE overlay route after deploy 2026-10-18; run 2.
 name: NM7 TV Web Production LIVE title overlay smoke
 
 on:
