@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Diagnose asset manifest helper
+      - name: Probe deployed assets over Cloudflare service binding
         shell: bash
         run: |
           set -euo pipefail
-          curl --silent --show-error --max-time 120 -i \
+          curl --fail --silent --show-error --max-time 120 \
             "https://nm7-static-assets-uploader.phuongnm7-iptv.workers.dev/manifest/mvd7e9dou6azk2w5o4sbt4t5ttoyn"
