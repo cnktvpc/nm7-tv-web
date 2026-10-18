@@ -51,6 +51,6 @@ for (const [label, runtime] of [['original-empty-class', oldRuntime], ['previous
   assert.ok(patched.includes("__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':''"), 'Worker rewrite must directly hide playerTop for ' + label);
   assert.ok(patched.includes("String(S.source||'').toLowerCase()==='live'"), 'Worker rewrite must keep source-based LIVE detection for ' + label);
 }
-assert.ok(worker.includes("className\\\\s*=\\\\s*[^;]+;"), 'Worker initializer regex must match already-patched class expressions, not only an empty class');
+assert.ok(/className\s*=\s*[^;]+;/.test(worker), 'Worker initializer regex must match already-patched class expressions, not only an empty class');
 
 console.log('NM7_TV_WEB_LIVE_PLAYER_METADATA_HIDDEN_REGRESSION_OK');
