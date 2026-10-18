@@ -5,6 +5,7 @@ on:
     branches:
       - fix/live-player-hide-title-source-20261018
       - fix/live-overlay-production-runtime-fallback-20261018
+      - fix/live-title-explicit-hide-20261018
     paths:
       - "web-tv/app.js"
       - "web-tv/app-safari-policy-mobile-controls.js"

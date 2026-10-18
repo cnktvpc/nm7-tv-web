@@ -947,3 +947,26 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 - Verified the existing ASSETS, PLAYLIST_SOURCE, and THETHAO_SOURCE bindings and confirmed the deployed code still contains the LIVE feed and playlist route handlers.
 - GitHub source and tests updated in branch fix/live-overlay-production-runtime-fallback-20261018. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39055466718.
 - Manual production playback should be checked with a hard refresh so the browser fetches the new overlay2 runtime. This release changes only the NM7 web-player UI and does not remove watermark text embedded in the video itself.
+
+
+---
+
+## 2026-10-18 — fix candidate 3: explicitly hide player title container
+
+- Production screenshot after overlay2 showed that the source URL was hidden but the team title still remained, proving the CSS/class-only approach was not reliable for the actual production path.
+- Candidate branch `fix/live-title-explicit-hide-20261018` now identifies LIVE from multiple independent signals (`livePlaybackContext`, `liveSectionActive`, `liveEventId`, group `LIVE`, or source `live`) and sets `#playerTop.style.display='none'` directly at player initialization. When ordinary IPTV playback starts, the inline display is restored.
+- Worker response fallback now rewrites the initialization regardless of whether an older version marker is already present; runtime cache-buster updated to `20261018-live-hide-overlay3` for PC/mobile paths.
+- Targeted regression workflow expanded to assert the explicit container hide. Release remains pending tests and verification against production responses; overlay2 is not considered final.
+
+
+---
+
+## 2026-10-18 — release candidate 4: explicit inline title hide in production Worker
+
+- User reported that the test link successfully hid the metadata but production continued to show the team title after overlay2. The source URL was hidden due mobile CSS, which masked the fact that the parent title strip was still visible.
+- Root cause confirmed in the deployed Worker helper: it only replaced the player initializer when a previous marker was absent, and its regex only matched the empty `className` variant. When the cached source already had the LIVE class marker, the rewrite was skipped.
+- Fix: generalized regex matches both old and already-marked player initializers; the Worker now always rewrites the code and sets `#playerTop.style.display='none'` directly for LIVE based on multiple independent signals, while resetting the style for normal channels.
+- Applied to both PC and mobile player scripts; cache-buster updated to `20261018-live-hide-overlay3`.
+- Production deployment: Worker `nm7-tv-web`, deployment `b42df3e0-0d2f-4fb1-9ef4-8f99a6252ae1`, version `93b106c6-9dbc-4e34-94f7-888b5984fec7`, 100% traffic. `ASSETS`, playlist, and sports source bindings unchanged.
+- Regression workflow PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084780733. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084788415.
+- The production Worker update is complete. User should hard refresh once; if the title remains, capture the served title after refreshing so the DOM state can be identified further.

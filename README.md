@@ -397,3 +397,21 @@ URL preview: https://nm7-tv-web-news-preview.phuongnm7-iptv.workers.dev/ban-tin.
 - Production deployment on Worker nm7-tv-web: deployment cf99b603-8ac0-4cc2-ac66-d03fd4e16bbb, version e5a003e3-ae20-45d4-b1e7-cab737cfc807, 100% traffic. Existing ASSETS, PLAYLIST_SOURCE, and THETHAO_SOURCE bindings verified unchanged.
 - API verification confirmed the new PC/mobile cache-busters, LIVE state fallback, PC asset route, and existing API live-feed and playlist handlers in the deployed Worker bundle.
 - Source changes and regression coverage are on branch fix/live-overlay-production-runtime-fallback-20261018; the dedicated browser validation workflow passed on the branch before final documentation updates.
+
+
+## LIVE title overlay follow-up — direct container hide (2026-10-18)
+
+- The user reported that production had hidden the stream URL but still showed the match title. The previous fix relied on a LIVE CSS class, which was not sufficient in the deployed runtime path.
+- New candidate branch `fix/live-title-explicit-hide-20261018` explicitly detects a LIVE event from `S.livePlaybackContext`, `S.liveSectionActive`, `c.liveEventId`, `c.group === 'LIVE'`, or `S.source === 'live'`, then sets `#playerTop.style.display = 'none'` at player-open time. Normal IPTV playback resets the inline display.
+- The Worker fallback now replaces the player initialization even when a previous class-marker already exists, and the cache-buster advances to `20261018-live-hide-overlay3`.
+- Release is pending targeted tests and production HTML/JS smoke verification; do not treat the old overlay2 release as the final fix.
+
+
+## Production follow-up released — explicit LIVE title hide (2026-10-18)
+
+- The user-reported residual team title was caused by the previous Worker rewrite only changing the player CSS class and skipping transformation when the older class marker was already present. Mobile CSS had hidden the source URL, but the title container remained visible in production.
+- The updated Worker now always matches and rewrites the active player initialization (PC or mobile), detects LIVE using `livePlaybackContext`, `liveSectionActive`, `liveEventId`, the `LIVE` group, or source `live`, and sets `#playerTop.style.display = 'none'` directly. Normal IPTV playback resets the inline display to the default.
+- HTML and asset responses use cache-buster `20261018-live-hide-overlay3`; additional LIVE-only CSS guards the title and container.
+- Production Worker `nm7-tv-web` deployment `b42df3e0-0d2f-4fb1-9ef4-8f99a6252ae1`, version `93b106c6-9dbc-4e34-94f7-888b5984fec7`, serving 100% traffic. Verified preserved bindings: `ASSETS`, `PLAYLIST_SOURCE` -> `phuongnm7-playlist`, `THETHAO_SOURCE` -> `thethaonm7`.
+- Existing `/api/live-feed` and `/api/playlist` routes remain in the deployed bundle. Regression workflow PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084780733. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084788415.
+- This direct-hide patch is intended to fix the production-only behavior where the test Worker already worked. It has been deployed; final device/browser verification remains recommended after one hard refresh.
