@@ -44,6 +44,7 @@ jobs:
           node scripts/test-news-thumbnail-parser.js
           node scripts/test-home-title-mobile-overlap.js
           node scripts/test-desktop-home-tabs.js
+          node scripts/test-live-player-hide-metadata.js
           node scripts/test-menu-fullscreen.js
           test -f web-tv/ban-tin.html
           echo "NM7_TV_JS_SYNTAX_SPORT_IPAD_AND_NEWS_REGRESSION_TESTS_OK"
