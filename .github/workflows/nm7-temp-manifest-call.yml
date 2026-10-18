@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Fetch asset manifest from the temporary Cloudflare helper
+      - name: Diagnose asset manifest helper
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 120 \
+          curl --silent --show-error --max-time 120 -i \
             "https://nm7-static-assets-uploader.phuongnm7-iptv.workers.dev/manifest/mvd7e9dou6azk2w5o4sbt4t5ttoyn"
