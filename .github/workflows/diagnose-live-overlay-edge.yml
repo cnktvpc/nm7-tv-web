@@ -50,7 +50,7 @@ jobs:
               boundary = "NM7RESTORE" + str(i)
               parts = []
               for h in bucket:
-                  asset_path = "/" + by_hash[h]
+                  asset_path = by_hash[h]
                   p = root / asset_path.lstrip("/")
                   raw = p.read_bytes()
                   if len(raw) != manifest[asset_path]["size"]:
