@@ -1454,6 +1454,31 @@ async function liveFeedResponse(request,env){
 }
 
 
+async function fetchStaticAsset(request, assetPath) {
+ const pathname=String(assetPath||new URL(request.url).pathname||'/');
+ let repoPath;
+ if(pathname==='/manifest.webmanifest')repoPath='/manifest.webmanifest';
+ else {
+  const clean=pathname.replace(/^\\/web-tv\\//,'/').replace(/^\\/+/, '');
+  repoPath='/web-tv/'+clean;
+ }
+ if(pathname==='/'||pathname==='/tv'||pathname==='/index.html')repoPath='/web-tv/index.html';
+ const target='https://raw.githubusercontent.com/cnktvpc/nm7-tv-web/main'+repoPath;
+ let upstream;
+ try {
+  upstream=await fetch(target,{headers:{'User-Agent':'NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
+ } catch(error) {
+  return new Response('NM7 static asset upstream unavailable: '+String(error&&error.message||error),{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+ }
+ const headers=new Headers(upstream.headers);
+ const ext=(repoPath.split('.').pop()||'').toLowerCase();
+ const mime={html:'text/html; charset=utf-8',js:'application/javascript; charset=utf-8',json:'application/json; charset=utf-8',webmanifest:'application/manifest+json; charset=utf-8',css:'text/css; charset=utf-8',webp:'image/webp',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',svg:'image/svg+xml',ico:'image/x-icon',m3u:'application/vnd.apple.mpegurl; charset=utf-8',m3u8:'application/vnd.apple.mpegurl; charset=utf-8'}[ext];
+ if(mime)headers.set('Content-Type',mime);
+ headers.delete('Content-Length');headers.delete('Content-Encoding');headers.delete('ETag');headers.delete('Last-Modified');
+ headers.set('Cache-Control','no-store, no-cache, must-revalidate, max-age=0');
+ headers.set('Access-Control-Allow-Origin','*');
+ return new Response(upstream.body,{status:upstream.status,statusText:upstream.statusText,headers});
+}
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
 const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4';
 const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay4';
@@ -1491,4 +1516,4 @@ async function liveOverlayScriptResponse(response){
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
-export default {async fetch(request,env){const url=new URL(request.url),p=url.pathname,q=url.searchParams;if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(new Headers())});try{if(p==='/api/live-feed')return liveFeedResponse(request,env);if(p==='/api/news/play')return newsPlayResponse(url);if(p==='/api/news')return newsResponse(url);if(p==='/api/playlist')return playlistResponse(q.get('source')||'tv',q.get('default')||'',env,q.get('refresh')==='1');if(p.startsWith('/api/dash-resource/'))return dashResourceResponse(request,url);if(p==='/api/source')return sourceResponse(q,env);if(p==='/api/stream')return streamResponse(request,q);if(p==='/api/image')return imageResponse(q);if(p==='/api/license')return licenseResponse(request,q);if(p==='/api/probe')return probeResponse(request,q);if(p==='/'||p==='/tv'){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));const h=new Headers(page.headers);h.set('Cache-Control','no-store, no-cache, must-revalidate');h.set('Pragma','no-cache');h.set('Expires','0');return liveOverlayHtmlResponse(new Response(page.body,{status:page.status,statusText:page.statusText,headers:h}));}if((p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js')&&request.method==='GET')return liveOverlayScriptResponse(await env.ASSETS.fetch(request));if(p.startsWith('/web-tv/')){const assetPath=p.replace(/^\/web-tv\//,'/');const assetRequest=new Request(new URL(assetPath,request.url),request);const asset=await env.ASSETS.fetch(assetRequest);if(request.method==='GET'&&assetPath==='/index.html')return liveOverlayHtmlResponse(asset);if(request.method==='GET'&&(assetPath==='/app-safari-policy-mobile-controls.js'||assetPath==='/app-safari-policy-pc-controls.js'))return liveOverlayScriptResponse(asset);return asset;}return env.ASSETS.fetch(request)}catch(e){return new Response(JSON.stringify({error:'worker error',message:String(e?.message||e)}),{status:502,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}})}}};
+export default {async fetch(request,env){const url=new URL(request.url),p=url.pathname,q=url.searchParams;if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(new Headers())});try{if(p==='/api/live-feed')return liveFeedResponse(request,env);if(p==='/api/news/play')return newsPlayResponse(url);if(p==='/api/news')return newsResponse(url);if(p==='/api/playlist')return playlistResponse(q.get('source')||'tv',q.get('default')||'',env,q.get('refresh')==='1');if(p.startsWith('/api/dash-resource/'))return dashResourceResponse(request,url);if(p==='/api/source')return sourceResponse(q,env);if(p==='/api/stream')return streamResponse(request,q);if(p==='/api/image')return imageResponse(q);if(p==='/api/license')return licenseResponse(request,q);if(p==='/api/probe')return probeResponse(request,q);if(p==='/'||p==='/tv'){const page=await fetchStaticAsset(request,'/index.html');const h=new Headers(page.headers);h.set('Cache-Control','no-store, no-cache, must-revalidate');h.set('Pragma','no-cache');h.set('Expires','0');return liveOverlayHtmlResponse(new Response(page.body,{status:page.status,statusText:page.statusText,headers:h}));}if((p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js')&&request.method==='GET')return liveOverlayScriptResponse(await fetchStaticAsset(request,p));if(p.startsWith('/web-tv/')){const assetPath=p.replace(/^\/web-tv\//,'/');const assetRequest=new Request(new URL(assetPath,request.url),request);const asset=await fetchStaticAsset(request,assetPath);if(request.method==='GET'&&assetPath==='/index.html')return liveOverlayHtmlResponse(asset);if(request.method==='GET'&&(assetPath==='/app-safari-policy-mobile-controls.js'||assetPath==='/app-safari-policy-pc-controls.js'))return liveOverlayScriptResponse(asset);return asset;}return fetchStaticAsset(request,p)}catch(e){return new Response(JSON.stringify({error:'worker error',message:String(e?.message||e)}),{status:502,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}})}}};
