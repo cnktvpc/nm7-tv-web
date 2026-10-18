@@ -37,10 +37,10 @@ jobs:
                   if len(raw)!=manifest[asset_path]["size"]:
                       raise SystemExit("SIZE_MISMATCH "+asset_path)
                   mime=mimetypes.guess_type(p.name)[0] or "application/octet-stream"
-                  parts.append((f"--{boundary}\\r\\nContent-Disposition: form-data; name=\"{h}\"; filename=\"{p.name}\"\\r\\nContent-Type: {mime}\\r\\n\\r\\n").encode())
+                  parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{h}\"; filename=\"{p.name}\"\r\nContent-Type: {mime}\r\n\r\n").encode())
                   parts.append(base64.b64encode(raw))
-                  parts.append(b"\\r\\n")
-              parts.append(f"--{boundary}--\\r\\n".encode())
+                  parts.append(b"\r\n")
+              parts.append(f"--{boundary}--\r\n".encode())
               body=b"".join(parts)
               req=urllib.request.Request(
                   "https://nm7-static-assets-uploader.phuongnm7-iptv.workers.dev/upload?key=nm7-restore-20261018",
