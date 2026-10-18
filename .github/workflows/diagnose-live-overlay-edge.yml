@@ -1,4 +1,4 @@
-name: Temporary NM7 asset restoration upload
+name: Verify NM7 production recovery and LIVE overlay
 
 on:
   push:
@@ -10,82 +10,26 @@ permissions:
   contents: read
 
 jobs:
-  restore:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
-      - name: Restore all 16 static files through the temporary asset relay
+      - name: Check restored production homepage and LIVE overlay paths
         shell: bash
         run: |
-          python3 - <<'PY'
-          import base64, json, mimetypes, pathlib, urllib.request, urllib.error
-          root = pathlib.Path("web-tv")
-          manifest = {
-            "/app-safari-policy-mobile-controls.js":{"hash":"e65afe6515127910c4fea4f7025aa6b9","size":106623},
-            "/app-safari-policy-pc-controls.js":{"hash":"e65afe6515127910c4fea4f7025aa6b9","size":106623},
-            "/app-safari-policy.js":{"hash":"725b9e461ad0a1f7dd049a9b74bcfcd4","size":105893},
-            "/app.js":{"hash":"6faf29883bc06e02419ef4424a863070","size":105868},
-            "/assets/nm7-default-background.webp":{"hash":"d8af6ac8ba532db465dcb8c44e00b718","size":1294528},
-            "/assets/nm7-main-logo.png":{"hash":"17e2cd6434e46cc605d95552c46aabfd","size":338140},
-            "/ban-tin.html":{"hash":"21633f36428d34b4ba67318f9dd73e4e","size":12847},
-            "/dash.all.min.js":{"hash":"f7f8d890b91b93f1e1b96b9fb8f9f3a4","size":585216},
-            "/index.html":{"hash":"e04f95b519fcfe83215e300a1a41cfca","size":29417},
-            "/live-core-livefix-20261014.js":{"hash":"cf5a2071fd0fa548b8af113ce08fd6cb","size":14873},
-            "/live-core.js":{"hash":"cf5a2071fd0fa548b8af113ce08fd6cb","size":14873},
-            "/live-ui-livefix-20261014.js":{"hash":"d1c735f01dfca86b2cac0edbb9e79828","size":15404},
-            "/live.js":{"hash":"d1c735f01dfca86b2cac0edbb9e79828","size":15404},
-            "/mobile-background.js":{"hash":"f1a65021c915e26990946b1c5a18587e","size":7373},
-            "/playlist.json":{"hash":"56182cc7b15292e93c2b9261e81af35e","size":125964},
-            "/youtube.js":{"hash":"dbac9ecd8a0703d3b4e181acebc229e6","size":1148}
-          }
-          buckets = [
-            ["dbac9ecd8a0703d3b4e181acebc229e6","cf5a2071fd0fa548b8af113ce08fd6cb","6faf29883bc06e02419ef4424a863070","56182cc7b15292e93c2b9261e81af35e","d8af6ac8ba532db465dcb8c44e00b718"],
-            ["f1a65021c915e26990946b1c5a18587e","d1c735f01dfca86b2cac0edbb9e79828","725b9e461ad0a1f7dd049a9b74bcfcd4","17e2cd6434e46cc605d95552c46aabfd"],
-            ["21633f36428d34b4ba67318f9dd73e4e","e04f95b519fcfe83215e300a1a41cfca","e65afe6515127910c4fea4f7025aa6b9","f7f8d890b91b93f1e1b96b9fb8f9f3a4"]
-          ]
-          by_hash = {v["hash"]: k for k, v in manifest.items()}
-          completion = None
-          for i, bucket in enumerate(buckets, 1):
-              boundary = "NM7RESTORE" + str(i)
-              parts = []
-              for h in bucket:
-                  asset_path = by_hash[h]
-                  p = root / asset_path.lstrip("/")
-                  raw = p.read_bytes()
-                  if len(raw) != manifest[asset_path]["size"]:
-                      raise SystemExit("SIZE_MISMATCH " + asset_path)
-                  mime = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
-                  parts.append((f"--{boundary}\r\nContent-Disposition: form-data; name=\"{h}\"\r\nContent-Type: {mime}\r\n\r\n").encode())
-                  parts.append(base64.b64encode(raw))
-                  parts.append(b"\r\n")
-              parts.append(f"--{boundary}--\r\n".encode())
-              body = b"".join(parts)
-              req = urllib.request.Request(
-                  "https://nm7-static-assets-uploader.phuongnm7-iptv.workers.dev/upload?key=nm7-restore-20261018",
-                  data=body,
-                  method="POST",
-                  headers={"Content-Type":"multipart/form-data; boundary="+boundary}
-              )
-              try:
-                  with urllib.request.urlopen(req, timeout=100) as res:
-                      status, payload = res.status, res.read().decode("utf-8")
-              except urllib.error.HTTPError as e:
-                  status, payload = e.code, e.read().decode("utf-8", "replace")
-              try:
-                  parsed = json.loads(payload)
-              except Exception:
-                  print(f"BUCKET_{i}_HTTP={status} FILES={len(bucket)} NON_JSON_RESPONSE={payload[:1500]!r}")
-                  raise
-              print(f"BUCKET_{i}_HTTP={status} FILES={len(bucket)} SUCCESS={parsed.get('success')} ERRORS={json.dumps(parsed.get('errors',[]))}")
-              if not parsed.get("success"):
-                  raise SystemExit("CLOUDFLARE_UPLOAD_FAILED bucket=" + str(i) + " payload=" + payload[:1000])
-              if parsed.get("result", {}).get("jwt"):
-                  completion = parsed["result"]["jwt"]
-          if not completion:
-              raise SystemExit("NO_COMPLETION_JWT")
-          print("NM7_ASSET_COMPLETION_JWT_BEGIN")
-          print(completion)
-          print("NM7_ASSET_COMPLETION_JWT_END")
-          print("NM7_ASSET_RESTORATION_UPLOADS_COMPLETE")
-          PY
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          for path in "/" "/?diag=restore" "/app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4" "/app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay4" "/assets/nm7-default-background.webp"; do
+            out="$(mktemp)"
+            status="$(curl -sS --max-time 30 -o "$out" -w "%{http_code}" "$BASE$path")"
+            size="$(wc -c < "$out")"
+            echo "PATH=$path STATUS=$status SIZE=$size"
+            if [ "$path" = "/" ] || [ "$path" = "/?diag=restore" ]; then
+              grep -Fq "NM7 TV 1.0.69" "$out" && echo "HOME_MARKER=NM7_TV_1.0.69_PRESENT" || true
+              grep -Fq '#player.live-playback #playerTop{display:none!important;}' "$out" && echo "OVERLAY_CSS=present" || true
+            fi
+            if [[ "$path" == *mobile-controls* || "$path" == *pc-controls* ]]; then
+              grep -q '__nm7LiveTitleHideV4' "$out" && echo "JS_HIDE_MARKER=present" || true
+            fi
+            rm -f "$out"
+          done
