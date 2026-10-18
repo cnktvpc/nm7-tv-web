@@ -14,22 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check restored production homepage and LIVE overlay paths
+      - name: Assert production routes and LIVE overlay transformations
         shell: bash
         run: |
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          for path in "/" "/?diag=restore" "/app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4" "/app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay4" "/assets/nm7-default-background.webp"; do
-            out="$(mktemp)"
-            status="$(curl -sS --max-time 30 -o "$out" -w "%{http_code}" "$BASE$path")"
-            size="$(wc -c < "$out")"
-            echo "PATH=$path STATUS=$status SIZE=$size"
-            if [ "$path" = "/" ] || [ "$path" = "/?diag=restore" ]; then
-              grep -Fq "NM7 TV 1.0.69" "$out" && echo "HOME_MARKER=NM7_TV_1.0.69_PRESENT" || true
-              grep -Fq '#player.live-playback #playerTop{display:none!important;}' "$out" && echo "OVERLAY_CSS=present" || true
-            fi
-            if [[ "$path" == *mobile-controls* || "$path" == *pc-controls* ]]; then
-              grep -q '__nm7LiveTitleHideV4' "$out" && echo "JS_HIDE_MARKER=present" || true
-            fi
-            rm -f "$out"
+          curl -fsSL --max-time 30 "$BASE/?diag=live-overlay-final" -o /tmp/home.html
+          grep -Fq "NM7 TV 1.0.69" /tmp/home.html
+          grep -Fq '#player.live-playback #playerTop{display:none!important;}' /tmp/home.html
+          grep -Fq '#player.live-playback #playerTitle{display:none!important;}' /tmp/home.html
+          echo "HOME_HTML_OK_AND_OVERLAY_CSS_PRESENT"
+          for variant in mobile pc; do
+            curl -fsSL --max-time 30 "$BASE/app-safari-policy-$variant-controls.js?v=20261018-live-hide-overlay4&diag=$GITHUB_SHA" -o "/tmp/$variant.js"
+            grep -q '__nm7LiveTitleHideV4' "/tmp/$variant.js"
+            grep -Fq "__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''" "/tmp/$variant.js"
+            grep -Fq "__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':''" "/tmp/$variant.js"
+            grep -Fq "__nm7PlayerTopV4.style.display=__nm7LiveTitleHideV4?'none':''" "/tmp/$variant.js"
+            echo "PLAYER_RUNTIME_OK"
           done
+          curl -fsSL --max-time 30 "$BASE/assets/nm7-default-background.webp" -o /tmp/bg.webp
+          test "$(wc -c < /tmp/bg.webp)" -gt 1000000
+          echo "STATIC_BACKGROUND_ASSET_OK"
