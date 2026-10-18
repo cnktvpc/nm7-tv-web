@@ -1463,12 +1463,12 @@ async function fetchStaticAsset(request, assetPath) {
   repoPath='/web-tv/'+clean;
  }
  if(pathname==='/'||pathname==='/tv'||pathname==='/index.html')repoPath='/web-tv/index.html';
- const target='https://raw.githubusercontent.com/cnktvpc/nm7-tv-web/main'+repoPath;
+ const target='https://raw.githubusercontent.com/cnktvpc/nm7-tv-web/main'+repoPath+'?nm7=20261018-live-hide-overlay5';
  let upstream;
  try {
   upstream=await fetch(target,{headers:{'User-Agent':'Mozilla/5.0 NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
   if(!upstream.ok){
-   const fallback='https://github.com/cnktvpc/nm7-tv-web/raw/refs/heads/main'+repoPath;
+   const fallback='https://github.com/cnktvpc/nm7-tv-web/raw/refs/heads/main'+repoPath+'?nm7=20261018-live-hide-overlay5';
    const retry=await fetch(fallback,{headers:{'User-Agent':'Mozilla/5.0 NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
    if(retry.ok)upstream=retry;
   }
