@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe deployed assets over Cloudflare service binding
+      - name: Generate static asset manifest through deployed origin
         shell: bash
         run: |
           set -euo pipefail
