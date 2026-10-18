@@ -1,0 +1,89 @@
+name: Deploy and verify NM7 TV Web LIVE title overlay
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "wrangler.toml"
+      - "worker.js"
+      - "web-tv/**"
+      - ".github/workflows/deploy-live-title-overlay-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nm7-tv-web-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout official source
+        uses: actions/checkout@v6
+
+      - name: Validate player JavaScript and Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web-tv/app.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --check web-tv/app-safari-policy-pc-controls.js
+          node --input-type=module --check < worker.js
+          node scripts/test-live-player-hide-metadata.js
+          echo "NM7_LIVE_TITLE_OVERLAY_SOURCE_TESTS_OK"
+
+      - name: Deploy official Worker and Static Assets with Wrangler
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: \${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Smoke test the actual production HTML and player runtimes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          CACHE="20261018-live-hide-overlay4"
+          curl -fsSL --max-time 30 "$BASE/?__nm7_live_overlay_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('/tmp/nm7-production.html').read_text(encoding='utf-8')
+          required = [
+              '#player.live-playback #playerTop{display:none!important;}',
+              '#player.live-playback #playerTitle{display:none!important;}',
+              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4',
+          ]
+          missing = [marker for marker in required if marker not in html]
+          if missing:
+              raise SystemExit('PRODUCTION_HTML_MISSING_LIVE_OVERLAY_MARKERS: ' + repr(missing))
+          print('NM7_PRODUCTION_LIVE_OVERLAY_HTML_OK')
+          PY
+
+          for variant in mobile pc; do
+            curl -fsSL --max-time 30 \
+              "$BASE/app-safari-policy-$variant-controls.js?v=$CACHE&__smoke=$GITHUB_SHA" \
+              -o "/tmp/nm7-$variant-runtime.js"
+            python3 - "$variant" "/tmp/nm7-$variant-runtime.js" <<'PY'
+          from pathlib import Path
+          import sys
+          variant, filename = sys.argv[1], sys.argv[2]
+          js = Path(filename).read_text(encoding='utf-8')
+          required = [
+              '__nm7LiveTitleHideV4',
+              "__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''",
+              "__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':''",
+              "__nm7PlayerTopV4.style.display=__nm7LiveTitleHideV4?'none':''",
+          ]
+          missing = [marker for marker in required if marker not in js]
+          if missing:
+              raise SystemExit('PRODUCTION_' + variant.upper() + '_RUNTIME_MISSING_DIRECT_HIDE: ' + repr(missing))
+          print('NM7_PRODUCTION_' + variant.upper() + '_LIVE_TITLE_SOURCE_HIDE_OK')
+          PY
+          done
+          echo "NM7_PRODUCTION_LIVE_TITLE_OVERLAY_SMOKE_OK"
