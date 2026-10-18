@@ -1480,7 +1480,7 @@ async function fetchStaticAsset(request, assetPath) {
  } catch(error) {
   return new Response('NM7 static asset upstream unavailable: '+String(error&&error.message||error),{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  }
- const headers=new Headers(upstream.headers);
+ const headers=new Headers(upstream.headers); headers.set('X-NM7-Static-Target',target); headers.set('X-NM7-Static-Upstream-Status',String(upstream.status));
  const ext=(repoPath.split('.').pop()||'').toLowerCase();
  const mime={html:'text/html; charset=utf-8',js:'application/javascript; charset=utf-8',json:'application/json; charset=utf-8',webmanifest:'application/manifest+json; charset=utf-8',css:'text/css; charset=utf-8',webp:'image/webp',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',svg:'image/svg+xml',ico:'image/x-icon',m3u:'application/vnd.apple.mpegurl; charset=utf-8',m3u8:'application/vnd.apple.mpegurl; charset=utf-8'}[ext];
  if(mime)headers.set('Content-Type',mime);
