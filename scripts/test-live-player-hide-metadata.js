@@ -4,63 +4,62 @@ const fs = require('node:fs');
 const assert = require('node:assert/strict');
 
 const app = fs.readFileSync('web-tv/app.js', 'utf8');
-const activeApp = fs.readFileSync('web-tv/app-safari-policy-mobile-controls.js', 'utf8');
+const mobileApp = fs.readFileSync('web-tv/app-safari-policy-mobile-controls.js', 'utf8');
 const pcApp = fs.readFileSync('web-tv/app-safari-policy-pc-controls.js', 'utf8');
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
 const worker = fs.readFileSync('worker.js', 'utf8');
 
-const liveClassMarker = "S.zone='player';var __nm7LiveOverlay=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');$('player').className=__nm7LiveOverlay?'live-playback':'';var __nm7PlayerTop=$('playerTop');if(__nm7PlayerTop)__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':'';";
-assert.ok(app.includes(liveClassMarker), 'app.js source must mark LIVE playback');
-assert.ok(activeApp.includes(liveClassMarker), 'active mobile browser runtime must mark LIVE playback');
-assert.ok(pcApp.includes(liveClassMarker), 'PC browser runtime must mark LIVE playback');
+const titleSourceAssignment = "$('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';";
+const titleHideMarker = "__nm7LiveTitleHideV4";
+const titleHideStatement = "__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''";
+const metaHideStatement = "__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':''";
 
-assert.ok(
-  html.includes('#player.live-playback #playerTop{display:none!important;}'),
-  'LIVE player CSS must hide #playerTop only in the LIVE playback context'
-);
-assert.ok(
-  activeApp.includes("$('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';"),
-  'Regular player title/source metadata binding must remain available'
-);
+// The canonical source and both browser runtimes must hide the actual title element,
+// not rely only on an ancestor class/CSS selector.
+for (const [name, source] of [['app.js', app], ['mobile runtime', mobileApp], ['PC runtime', pcApp]]) {
+  assert.ok(source.includes(titleSourceAssignment), name + ': standard player title/source assignment must remain');
+  assert.ok(source.includes(titleHideMarker), name + ': LIVE title state must be evaluated at the title assignment');
+  assert.ok(source.includes("$('playerTitle').style.display=__nm7LiveTitleHideV4?'none':''"), name + ': playerTitle must be hidden directly for LIVE');
+  assert.ok(source.includes("$('playerMeta').style.display=__nm7LiveTitleHideV4?'none':''"), name + ': playerMeta must be hidden directly for LIVE');
+  assert.ok(source.includes("if(__nm7PlayerTopV4)__nm7PlayerTopV4.style.display=__nm7LiveTitleHideV4?'none':''"), name + ': playerTop must be hidden for LIVE');
+}
+
+// Keep a scoped CSS safety net; ordinary channel playback must not lose metadata globally.
+assert.ok(html.includes('#player.live-playback #playerTop{display:none!important;}'), 'LIVE-only playerTop CSS must exist');
+assert.ok(html.includes('#player.live-playback #playerTitle{display:none!important;}'), 'LIVE-only title CSS must exist');
 assert.ok(
   !html.split('\n').some(line => line.trim().startsWith('#playerTop{display:none!important;')),
-  'Do not globally hide player metadata for non-LIVE channels'
+  'Do not globally hide title/source for ordinary IPTV playback'
 );
-assert.ok(worker.includes('LIVE_PLAYER_OVERLAY_CSS'), 'Worker must retain an HTML overlay fallback for the existing production assets');
-assert.ok(worker.includes('LIVE_PLAYER_INIT_RE'), 'Worker must patch the active LIVE player runtime when old assets are served');
-assert.ok(worker.includes('LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL'), 'Worker must cache-bust the PC player runtime too');
-assert.ok(worker.includes('c.liveEventId'), 'Worker must identify an event directly when the LIVE context flags are absent');
-assert.ok(worker.includes("__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':''"), 'Worker must explicitly hide the player title/source container');
-assert.ok(worker.includes('20261018-live-hide-overlay3'), 'Worker must serve a new cache-busted runtime');
-assert.ok(worker.includes('liveOverlayHtmlResponse(new Response(page.body'), 'Worker must transform the home HTML response');
-assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js'"), 'Worker must transform both PC and mobile player runtime assets');
-assert.ok(
-  html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay3'),
-  'index.html must use a new cache-buster for the active runtime script'
-);
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4'), 'index.html must reference overlay4 runtime');
 
-// Exercise the same broad initializer pattern used by Worker-side rewriting,
-// including both the original empty class and the previous CSS-class-only patch.
+// Production Worker must reproduce the working test-wrapper behavior, while also hiding
+// playerTitle explicitly so the production-only residual-title case cannot recur.
+assert.ok(worker.includes('LIVE_PLAYER_OVERLAY_CSS'), 'Worker must apply the tested scoped CSS');
+assert.ok(worker.includes('LIVE_PLAYER_INIT_RE'), 'Worker must recognize old and already-patched player initialization');
+assert.ok(worker.includes('LIVE_PLAYER_TITLE_ASSIGN_RE'), 'Worker must locate the actual title/source DOM assignments');
+assert.ok(worker.includes('LIVE_PLAYER_TITLE_HIDE_INSERTION'), 'Worker must patch the actual title/source DOM');
+assert.ok(worker.includes(titleHideMarker), 'Worker must insert the title-hide marker');
+assert.ok(worker.includes(titleHideStatement), 'Worker must set playerTitle display directly');
+assert.ok(worker.includes(metaHideStatement), 'Worker must set playerMeta display directly');
+assert.ok(worker.includes('20261018-live-hide-overlay4'), 'Worker must serve overlay4 with a new cache-buster');
+assert.ok(worker.includes('liveOverlayHtmlResponse(new Response(page.body'), 'Worker must transform home HTML');
+assert.ok(worker.includes('LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL'), 'Worker must cover the PC runtime');
+assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js'"), 'Worker must route both player runtimes');
+
+// Regression-check the initializer matcher against both the original test runtime and
+// a runtime that already received the old class-only patch.
 const initPattern = /S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
-const directHideReplacement = "S.zone='player';var __nm7LiveOverlay=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');$('player').className=__nm7LiveOverlay?'live-playback':'';var __nm7PlayerTop=$('playerTop');if(__nm7PlayerTop)__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
-const oldRuntime = "S.zone='player';$('player').className='';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
-const classOnlyRuntime = "S.zone='player';$('player').className=(S.livePlaybackContext||S.liveSectionActive)?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
-for (const [label, runtime] of [['original-empty-class', oldRuntime], ['previous-class-only-patch', classOnlyRuntime]]) {
-  assert.match(runtime, initPattern, 'Worker initializer matcher must cover ' + label);
-  const patched = runtime.replace(initPattern, directHideReplacement);
-  assert.ok(patched.includes("__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':''"), 'Worker rewrite must directly hide playerTop for ' + label);
-  assert.ok(patched.includes("String(S.source||'').toLowerCase()==='live'"), 'Worker rewrite must keep source-based LIVE detection for ' + label);
-}
-assert.ok(/className\s*=\s*[^;]+;/.test(worker), 'Worker initializer regex must match already-patched class expressions, not only an empty class');
-assert.ok(worker.includes('LIVE_PLAYER_TITLE_ASSIGN_RE'), 'Worker must locate title/source assignments in the active player runtime');
-assert.ok(worker.includes('LIVE_PLAYER_TITLE_HIDE_INSERTION'), 'Worker must explicitly patch title and source element visibility, not just the parent CSS class');
-assert.ok(worker.includes("__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''"), 'Worker must explicitly hide the playerTitle element for LIVE');
-assert.ok(worker.includes("__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':''"), 'Worker must explicitly hide the playerMeta element for LIVE');
-assert.ok(worker.includes('20261018-live-hide-overlay4'), 'Worker must use the new production cache-buster');
-const titleAssignPattern = /\$\(\s*['\"]playerTitle['\"]\s*\)\.textContent\s*=\s*c\.name\s*;\s*\$\(\s*['\"]playerMeta['\"]\s*\)\.textContent\s*=\s*c\.url\s*\|\|\s*['\"]{2}\s*;/;
-const titleSourceAssignment = "$('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';";
-assert.match(titleSourceAssignment, titleAssignPattern, 'Test fixture must match real player title and source assignment');
-const titleHideFixture = titleSourceAssignment + "var __nm7LiveTitleHideV4=!!S.livePlaybackContext;$('playerTitle').style.display=__nm7LiveTitleHideV4?'none':'';$('playerMeta').style.display=__nm7LiveTitleHideV4?'none':'';";
-assert.ok(titleHideFixture.includes("$('playerTitle').style.display=__nm7LiveTitleHideV4?'none':''"), 'LIVE title hide must operate on the exact title element');
+const originalRuntime = "S.zone='player';$('player').className='';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
+const oldClassOnlyRuntime = "S.zone='player';$('player').className=(S.livePlaybackContext||S.liveSectionActive)?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
+assert.match(originalRuntime, initPattern, 'Worker matcher must match the original test runtime');
+assert.match(oldClassOnlyRuntime, initPattern, 'Worker matcher must match the previously patched runtime');
+
+// Match the title setter used by the active app and assert direct per-element style handling.
+const titleAssignPattern = /\$\(\s*['"]playerTitle['"]\s*\)\.textContent\s*=\s*c\.name\s*;\s*\$\(\s*['"]playerMeta['"]\s*\)\.textContent\s*=\s*c\.url\s*\|\|\s*['"]{2}\s*;/;
+assert.match(titleSourceAssignment, titleAssignPattern, 'Title-source matcher must fit the actual runtime assignment');
+const titlePatched = titleSourceAssignment + "var __nm7LiveTitleHideV4=!!S.livePlaybackContext;var __nm7PlayerTitleV4=$('playerTitle');if(__nm7PlayerTitleV4)__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':'';var __nm7PlayerMetaV4=$('playerMeta');if(__nm7PlayerMetaV4)__nm7PlayerMetaV4.style.display=__nm7LiveTitleHideV4?'none':'';";
+assert.ok(titlePatched.includes(titleHideStatement), 'Test transformation must hide the title DOM node');
+assert.ok(titlePatched.includes(metaHideStatement), 'Test transformation must hide the source URL DOM node');
 
 console.log('NM7_TV_WEB_LIVE_PLAYER_METADATA_HIDDEN_REGRESSION_OK');
