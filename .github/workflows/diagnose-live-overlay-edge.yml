@@ -1,0 +1,33 @@
+name: Temporary NM7 production route diagnosis
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-live-overlay-edge.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe production paths and overlay markers
+        shell: bash
+        run: |
+          set +e
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          for path in "/" "/?diag=1" "/index.html?diag=1" "/app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4&diag=1" "/app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay4&diag=1" "/assets/nm7-default-background.webp" "/web-tv/index.html?diag=1" "/api/playlist?source=tv&default=2"; do
+            echo "===== PATH $path ====="
+            out="$(mktemp)"
+            code="$(curl -sS --max-time 25 -o "$out" -w "%{http_code}" "$BASE$path")"
+            echo "STATUS=$code SIZE=$(wc -c < "$out")"
+            head -c 350 "$out" | tr '\n' ' '
+            echo
+            if grep -q 'player.live-playback #playerTop' "$out"; then echo "MARKER_HTML_CSS=YES"; fi
+            if grep -q '__nm7LiveTitleHideV4' "$out"; then echo "MARKER_JS_HIDE=YES"; fi
+            if grep -q '"channels"' "$out"; then echo "MARKER_PLAYLIST_JSON=YES"; fi
+            rm -f "$out"
+          done
