@@ -1,4 +1,4 @@
-name: Deploy and verify NM7 TV Web LIVE title overlay
+name: Verify NM7 TV Web LIVE title overlay on production
 
 on:
   push:
@@ -8,6 +8,8 @@ on:
       - "wrangler.toml"
       - "worker.js"
       - "web-tv/**"
+      - "README.md"
+      - "PROGRESS.md"
       - ".github/workflows/deploy-live-title-overlay-fix.yml"
   workflow_dispatch:
 
@@ -26,7 +28,7 @@ jobs:
       - name: Checkout official source
         uses: actions/checkout@v6
 
-      - name: Validate player JavaScript and Worker
+      - name: Validate player JavaScript and Worker source
         shell: bash
         run: |
           set -euo pipefail
@@ -37,14 +39,7 @@ jobs:
           node scripts/test-live-player-hide-metadata.js
           echo "NM7_LIVE_TITLE_OVERLAY_SOURCE_TESTS_OK"
 
-      - name: Deploy official Worker and Static Assets with Wrangler
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: e8657c5bb3a292d9a2adfc5cffb7c95b
-          command: deploy
-
-      - name: Smoke test the actual production HTML and player runtimes
+      - name: Smoke test the actual production HTML and player runtimes (no deployment)
         shell: bash
         run: |
           set -euo pipefail
