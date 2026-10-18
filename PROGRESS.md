@@ -1,3 +1,17 @@
+## Mốc mới nhất — ẩn thanh tiêu đề/URL khi xem kênh IPTV thường; giữ nguyên LIVE (18/10/2026)
+
+- **Kết quả:** đã sửa lỗi thanh tên kênh/URL nguồn do player phủ lên video IPTV thông thường, theo ảnh người dùng gửi (VTV1 HD).
+- **Thay đổi duy nhất về giao diện:** thêm CSS `#player:not(.live-playback) #playerTop{display:none!important;}` vào `web-tv/index.html`. Điều kiện `:not(.live-playback)` giới hạn quy tắc cho player không ở chế độ LIVE.
+- **Bảo toàn LIVE:** giữ nguyên selector `#player.live-playback #playerTop{display:none!important;}` và `#player.live-playback #playerTitle{display:none!important;}`. Không sửa `worker.js`, JavaScript/runtime player, logic LIVE, server picker hoặc URL nguồn playlist.
+- **Regression:** mở rộng `scripts/test-live-player-hide-metadata.js` để yêu cầu cả quy tắc IPTV mới và hai quy tắc LIVE đã nghiệm thu; cập nhật ba production smoke workflow để kiểm tra selector IPTV sau deploy.
+- **PR/commit:** [PR #10](https://github.com/cnktvpc/nm7-tv-web/pull/10), squash-merge vào `main`; commit [`a70c915e8c968623f175e08910e90b7a04fd781d`](https://github.com/cnktvpc/nm7-tv-web/commit/a70c915e8c968623f175e08910e90b7a04fd781d).
+- **Production PASS:** [overlay smoke #39108104927 — SUCCESS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39108104927); [validation smoke #39108104998 — SUCCESS](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39108104998). HTML thực tế có selector IPTV mới, cả hai selector LIVE cũ và cache key runtime hiện hành cho PC/mobile. Cloudflare Worker version 467 nhận 100% lưu lượng.
+- **Ghi chú:** workflow deploy tổng thể đã phát hành Worker thành công nhưng tổng job còn đỏ ở bước xác minh nguồn TV preset 1 do upstream thực tế không khớp URL mà assertion cũ mong đợi. Không liên quan đến overlay; không đổi playlist trong bản sửa này.
+- **Phạm vi:** chỉ NM7 TV Web/Cloudflare; không sửa NM7 TV Android hoặc NM7 Mobile.
+- **Production URL:** https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 ## Mốc mới nhất — sửa nút fullscreen và toast tua trên mobile (14/10/2026)
 
 - Player điện thoại/tablet: nút fullscreen tự ẩn sau 2,4 giây không thao tác, chạm/touchmove hiện lại. Chỉ ẩn nút fullscreen; thanh điều khiển playback không bị ẩn theo.
