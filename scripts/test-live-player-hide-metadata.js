@@ -31,7 +31,7 @@ assert.ok(
   !html.split('\n').some(line => line.trim().startsWith('#playerTop{display:none!important;')),
   'Do not globally hide title/source for ordinary IPTV playback'
 );
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4'), 'index.html must reference overlay4 runtime');
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay5'), 'index.html must reference overlay4 runtime');
 
 // Production Worker must reproduce the working test-wrapper behavior, while also hiding
 // playerTitle explicitly so the production-only residual-title case cannot recur.
@@ -42,7 +42,7 @@ assert.ok(worker.includes('LIVE_PLAYER_TITLE_HIDE_INSERTION'), 'Worker must patc
 assert.ok(worker.includes(titleHideMarker), 'Worker must insert the title-hide marker');
 assert.ok(worker.includes(titleHideStatement), 'Worker must set playerTitle display directly');
 assert.ok(worker.includes(metaHideStatement), 'Worker must set playerMeta display directly');
-assert.ok(worker.includes('20261018-live-hide-overlay4'), 'Worker must serve overlay4 with a new cache-buster');
+assert.ok(worker.includes('20261018-live-hide-overlay5'), 'Worker must serve overlay4 with a new cache-buster');
 assert.ok(worker.includes('liveOverlayHtmlResponse(new Response(page.body'), 'Worker must transform home HTML');
 assert.ok(worker.includes('LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL'), 'Worker must cover the PC runtime');
 assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js'"), 'Worker must route both player runtimes');
