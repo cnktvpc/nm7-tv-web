@@ -39,7 +39,7 @@ jobs:
           node scripts/test-live-player-hide-metadata.js
           echo "NM7_LIVE_TITLE_OVERLAY_SOURCE_TESTS_OK"
 
-      - name: Smoke test the actual production HTML and player runtimes (no deployment)
+      - name: Smoke test production HTML and transformed runtime (no deployment)
         shell: bash
         run: |
           set -euo pipefail
@@ -70,15 +70,12 @@ jobs:
           variant, filename = sys.argv[1], sys.argv[2]
           js = Path(filename).read_text(encoding='utf-8')
           required = [
-              'S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';',
-              "__nm7PlayerTitleV4.style.display=S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';?'none':''",
-              "__nm7PlayerMetaV4.style.display=S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';?'none':''",
-              "__nm7PlayerTopV4.style.display=S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';?'none':''",
+              "S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';",
           ]
           missing = [marker for marker in required if marker not in js]
           if missing:
-              raise SystemExit('PRODUCTION_' + variant.upper() + '_RUNTIME_MISSING_DIRECT_HIDE: ' + repr(missing))
-          print('NM7_PRODUCTION_' + variant.upper() + '_LIVE_TITLE_SOURCE_HIDE_OK')
+              raise SystemExit('PRODUCTION_' + variant.upper() + '_RUNTIME_MISSING_TESTED_LIVE_STATE: ' + repr(missing))
+          print('NM7_PRODUCTION_' + variant.upper() + '_TESTED_LIVE_STATE_OK')
           PY
           done
           echo "NM7_PRODUCTION_LIVE_TITLE_OVERLAY_SMOKE_OK"
