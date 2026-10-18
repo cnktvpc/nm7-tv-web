@@ -19,9 +19,10 @@ for (const [name, source] of [['app.js', app], ['mobile runtime', mobileApp], ['
 
 assert.ok(html.includes('#player.live-playback #playerTop{display:none!important;}'), 'LIVE-only title/source CSS must exist');
 assert.ok(html.includes('#player.live-playback #playerTitle{display:none!important;}'), 'LIVE-only title CSS must exist');
+assert.ok(html.includes('#player:not(.live-playback) #playerTop{display:none!important;}'), 'ordinary IPTV playback must hide the app title/source strip without changing LIVE styling');
 assert.ok(
   !html.split('\n').some(line => line.trim().startsWith('#playerTop{display:none!important;')),
-  'Do not globally hide metadata for ordinary IPTV channels'
+  'Do not apply a global metadata hide outside the player context'
 );
 assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6'), 'index.html must reference the promoted runtime cache key');
 
