@@ -312,6 +312,7 @@ body.mobile-mode #playerFullscreenBtn{right:calc(8px + env(safe-area-inset-right
 body.mobile-mode #playerFullscreenBtn .fullscreenLabel{display:none}
 body.mobile-mode #playerTop{padding-right:calc(64px + env(safe-area-inset-right,0px))}
 #player:fullscreen,#player:-webkit-full-screen{position:fixed;inset:0;width:100%;height:100%;background:#000}
+#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}
 </style>
 <script src="./dash.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js"></script>
@@ -350,7 +351,7 @@ body.mobile-mode #playerTop{padding-right:calc(64px + env(safe-area-inset-right,
 <script src="./youtube.js?v=20261006-youtube-original1"></script>
 <script src="./mobile-background.js?v=20261006-bg1"></script>
 <script src="./live-core-livefix-20261014.js"></script>
-<script src="./app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4"></script>
+<script src="./app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay5"></script>
 <script src="./live-ui-livefix-20261014.js"></script>
 </body>
 </html>
