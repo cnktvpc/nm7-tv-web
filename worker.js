@@ -1474,7 +1474,7 @@ async function liveOverlayHtmlResponse(response){
  if(!html.includes(LIVE_PLAYER_OVERLAY_CSS)){
   if(/<\/style>/i.test(html))html=html.replace(/<\/style>/i,LIVE_PLAYER_OVERLAY_CSS+'\n</style>');
   else if(/<\/head>/i.test(html))html=html.replace(/<\/head>/i,'<style>'+LIVE_PLAYER_OVERLAY_CSS+'</style>\n</head>');
-  else return new Response('LIVE title overlay release failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
+  else return new Response('LIVE title overlay release failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  }
  html=html.replace(/app-safari-policy-(mobile|pc)-controls\.js(?:\?v=[^"'\s>]*)?/g,(_,variant)=>variant==='pc'?LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL:LIVE_PLAYER_OVERLAY_SCRIPT_URL);
  return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
@@ -1484,10 +1484,10 @@ async function liveOverlayScriptResponse(response){
  let fixed=await response.text();
  if(LIVE_PLAYER_INIT_RE.test(fixed))fixed=fixed.replace(LIVE_PLAYER_INIT_RE,LIVE_PLAYER_INIT_REPLACEMENT);
  if(!fixed.includes('__nm7LiveTitleHideV4')){
-  if(!LIVE_PLAYER_TITLE_ASSIGN_RE.test(fixed))return new Response('LIVE title overlay release failed: could not locate player title assignment in active runtime.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
+  if(!LIVE_PLAYER_TITLE_ASSIGN_RE.test(fixed))return new Response('LIVE title overlay release failed: could not locate player title assignment in active runtime.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
   fixed=fixed.replace(LIVE_PLAYER_TITLE_ASSIGN_RE,match=>match+LIVE_PLAYER_TITLE_HIDE_INSERTION);
  }
- if(!fixed.includes('__nm7PlayerTitleV4')||!fixed.includes("__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''"))return new Response('LIVE title overlay release failed: explicit title-hide marker missing.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'});
+ if(!fixed.includes('__nm7PlayerTitleV4')||!fixed.includes("__nm7PlayerTitleV4.style.display=__nm7LiveTitleHideV4?'none':''"))return new Response('LIVE title overlay release failed: explicit title-hide marker missing.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
