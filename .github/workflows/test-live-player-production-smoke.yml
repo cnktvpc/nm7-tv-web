@@ -1,3 +1,4 @@
+# Production validation trigger: Cloudflare version 448 activated on 2026-10-18.
 name: NM7 TV Web Production LIVE title overlay smoke
 
 on:
