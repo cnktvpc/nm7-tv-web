@@ -1454,10 +1454,10 @@ async function liveFeedResponse(request,env){
 }
 
 
-const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay2';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay2';
-const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*['"]{2};\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
+const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay3';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay3';
+const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 function noCacheResponseHeaders(sourceHeaders){
  const headers=new Headers(sourceHeaders||{});
  headers.delete('Content-Length');headers.delete('Content-Encoding');headers.delete('ETag');headers.delete('Last-Modified');
@@ -1479,12 +1479,8 @@ async function liveOverlayHtmlResponse(response){
 async function liveOverlayScriptResponse(response){
  if(!response||!response.ok)return response;
  const js=await response.text();
- const marker="(S.livePlaybackContext||S.liveSectionActive)?'live-playback':''";
- let fixed=js;
- if(!fixed.includes(marker)){
-  if(!LIVE_PLAYER_INIT_RE.test(fixed))return new Response('LIVE overlay preview failed: could not locate the active player initialization.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
-  fixed=fixed.replace(LIVE_PLAYER_INIT_RE,"S.zone='player';$('player').className=(S.livePlaybackContext||S.liveSectionActive)?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();");
- }
+ if(!LIVE_PLAYER_INIT_RE.test(js))return new Response('LIVE overlay release failed: could not locate the active player initialization.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+ const fixed=js.replace(LIVE_PLAYER_INIT_RE,"S.zone='player';var __nm7LiveOverlay=!!(S.livePlaybackContext||S.liveSectionActive||c.liveEventId||String(c.group||'').toUpperCase()==='LIVE'||String(S.source||'').toLowerCase()==='live');$('player').className=__nm7LiveOverlay?'live-playback':'';var __nm7PlayerTop=$('playerTop');if(__nm7PlayerTop)__nm7PlayerTop.style.display=__nm7LiveOverlay?'none':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();");
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
