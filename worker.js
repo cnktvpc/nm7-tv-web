@@ -1466,7 +1466,12 @@ async function fetchStaticAsset(request, assetPath) {
  const target='https://raw.githubusercontent.com/cnktvpc/nm7-tv-web/main'+repoPath;
  let upstream;
  try {
-  upstream=await fetch(target,{headers:{'User-Agent':'NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
+  upstream=await fetch(target,{headers:{'User-Agent':'Mozilla/5.0 NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
+  if(!upstream.ok){
+   const fallback='https://github.com/cnktvpc/nm7-tv-web/raw/refs/heads/main'+repoPath;
+   const retry=await fetch(fallback,{headers:{'User-Agent':'Mozilla/5.0 NM7-TV-Web/1.0.69','Accept':request.headers.get('Accept')||'*/*'},redirect:'follow'});
+   if(retry.ok)upstream=retry;
+  }
  } catch(error) {
   return new Response('NM7 static asset upstream unavailable: '+String(error&&error.message||error),{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  }
