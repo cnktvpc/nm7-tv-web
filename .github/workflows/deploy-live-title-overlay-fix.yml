@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          CACHE="20261018-live-hide-overlay4"
+          CACHE="20261018-live-hide-overlay5"
           curl -fsSL --max-time 30 "$BASE/?__nm7_live_overlay_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html
           python3 - <<'PY'
           from pathlib import Path
@@ -52,7 +52,7 @@ jobs:
           required = [
               '#player.live-playback #playerTop{display:none!important;}',
               '#player.live-playback #playerTitle{display:none!important;}',
-              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay4',
+              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay5',
           ]
           missing = [marker for marker in required if marker not in html]
           if missing:
