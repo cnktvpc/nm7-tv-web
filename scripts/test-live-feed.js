@@ -82,7 +82,7 @@ assert.match(html,/id="btnLiveTab"/,'home Live tab exists');
 assert.match(html,/id="liveServerBtn"/,'in-player Live server switch exists');
 const liveRowStyle=html.match(/\.live-row\{[^}]*background:rgba\(8,18,30,([0-9.]+)\)/);
 assert.ok(liveRowStyle,'LIVE event cards must define a translucent background');
-assert.ok(Number(liveRowStyle[1])<=0.65&&Number(liveRowStyle[1])>=0.5,'LIVE event card opacity must remain balanced and readable while showing more of the background photo');
+assert.ok(Number(liveRowStyle[1])<=0.5&&Number(liveRowStyle[1])>=0.4,'LIVE event card opacity must remain balanced and readable while showing more of the background photo');
 assert.match(html,/live-core-livefix-20261014\.js/,'updated parser uses a unique asset path to avoid stale edge JS');
 assert.match(html,/live-ui-livefix-20261014\.js/,'Live UI uses a unique asset path to avoid stale edge JS');
 const liveUi=fs.readFileSync(path.join(__dirname,'..','web-tv','live.js'),'utf8');
