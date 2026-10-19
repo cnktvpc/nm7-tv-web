@@ -37,9 +37,9 @@ for (const file of files) {
   const retryHandler = source.slice(retryStart, retryEnd);
   assert.equal(retryHandler.includes('toast('), false,
     file + ': automatic proxy/source fallback must not leave transient error toasts over working video');
-  assert.match(retryHandler, /dbg\\('Playback retry:/,
+  assert.ok(retryHandler.includes("dbg('Playback retry:"),
     file + ': retry reason remains available in debug diagnostics');
-  assert.match(retryHandler, /dbg\\('Playback fallback:/,
+  assert.ok(retryHandler.includes("dbg('Playback fallback:"),
     file + ': source switching remains available in debug diagnostics');
   assert.ok(source.includes('clearToast();') && source.includes('S.current=c;'),
     file + ': opening a new channel clears a stale playback toast');
