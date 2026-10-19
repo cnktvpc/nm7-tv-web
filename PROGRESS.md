@@ -1,6 +1,16 @@
+
+## 2026-10-19 — Tinh chỉnh thêm độ trong suốt thẻ LIVE (PR #13)
+
+- Theo ảnh kiểm tra trên điện thoại, giảm alpha nền `.live-row` từ `0.62` xuống `0.48` để ảnh nền hiện rõ hơn.
+- Không thay đổi chữ, viền, bố cục, nút, logic LIVE hoặc IPTV.
+- Cập nhật regression range thành 0.40–0.50. PR [#13](https://github.com/cnktvpc/nm7-tv-web/pull/13), merge commit [`ed45add283c3c04a227634c9c9a7ba6534b31485`](https://github.com/cnktvpc/nm7-tv-web/commit/ed45add283c3c04a227634c9c9a7ba6534b31485).
+- Kiểm thử sau merge đang chạy; xác nhận trạng thái Cloudflare production theo workflow sau merge.
+
+---
+
 ## 2026-10-19 — Làm nền thẻ danh sách LIVE trong suốt hơn (đã merge/deploy)
 
-- Giảm alpha nền `.live-row` trong `web-tv/index.html` từ `rgba(8,18,30,.82)` xuống `rgba(8,18,30,.62)` để ảnh nền phong cảnh nhìn rõ hơn, giảm cảm giác tối.
+- Giảm alpha nền `.live-row` trong `web-tv/index.html` từ `rgba(8,18,30,.82)` xuống `rgba(8,18,30,.48)` để ảnh nền phong cảnh nhìn rõ hơn, giảm cảm giác tối.
 - Giữ nguyên màu chữ, viền, khoảng cách, bố cục và ba nút thao tác; không đổi LIVE feed, gom sự kiện/server, playback, IPTV hoặc CSS overlay đã nghiệm thu.
 - Bổ sung kiểm tra vào `scripts/test-live-feed.js`: thẻ `.live-row` phải có nền RGBA với alpha trong khoảng 0.50–0.65.
 - PR [#12](https://github.com/cnktvpc/nm7-tv-web/pull/12) đã merge vào `main`; merge commit [`11271fae637491cf8523872d78a288b8ccd9a212`](https://github.com/cnktvpc/nm7-tv-web/commit/11271fae637491cf8523872d78a288b8ccd9a212).
