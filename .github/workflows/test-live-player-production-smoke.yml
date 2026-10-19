@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          CACHE="20261018-live-hide-overlay6"
+          CACHE="20261018-live-hide-overlay6&retryToast=20261019-cleanup1"
           curl -fsSL --max-time 30 "$BASE/?__nm7_live_title_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html
           python3 - <<'PY'
           from pathlib import Path
@@ -36,7 +36,8 @@ jobs:
               '#player.live-playback #playerTop{display:none!important;}',
               '#player.live-playback #playerTitle{display:none!important;}',
               '#player:not(.live-playback) #playerTop{display:none!important;}',
-              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6'
+              'retryToast=20261019-cleanup1',
+              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6&retryToast=20261019-cleanup1'
           ]
           missing = [x for x in required if x not in html]
           if missing:
