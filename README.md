@@ -1,3 +1,16 @@
+# Cập nhật mới nhất — làm sáng nền thẻ sự kiện LIVE trên mobile (19/10/2026)
+
+- **Yêu cầu:** thẻ sự kiện LIVE trên nền phong cảnh đang quá tối; cần cho ảnh nền xuyên qua nhiều hơn nhưng vẫn giữ chữ trắng dễ đọc.
+- **Thay đổi:** trong `web-tv/index.html`, giảm alpha nền `.live-row` từ `rgba(8,18,30,.82)` xuống `rgba(8,18,30,.62)`. Độ đục giảm 20 điểm phần trăm, nền ảnh phía sau hiện rõ hơn. Không đổi bố cục, viền, màu chữ, nút, logic phát, feed/server LIVE hoặc CSS ẩn tiêu đề/URL đã nghiệm thu.
+- **Regression:** `scripts/test-live-feed.js` xác nhận thẻ LIVE có nền trong suốt và alpha nằm trong khoảng 0.50–0.65 để cân bằng độ sáng và khả năng đọc.
+- **PR/commit:** [PR #12](https://github.com/cnktvpc/nm7-tv-web/pull/12), merge commit [`11271fae637491cf8523872d78a288b8ccd9a212`](https://github.com/cnktvpc/nm7-tv-web/commit/11271fae637491cf8523872d78a288b8ccd9a212).
+- **Kiểm thử PASS:** [LIVE UI regression](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247374858), [JavaScript/Web validation](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247374755), [Browser remote + HLS E2E](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247374838), [production LIVE overlay smoke](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247552237) và [production verification](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247552234).
+- **Cloudflare:** Worker version 473 nhận 100% lưu lượng. Workflow deploy đã chạy bước Wrangler thành công nhưng tổng job báo lỗi ở kiểm tra nguồn TV preset 1 vì upstream thực tế là URL Vercel cũ khác URL GitHub mà assertion mong đợi; vấn đề playlist riêng, không thuộc thay đổi giao diện.
+- **Phạm vi:** chỉ giao diện danh sách LIVE của NM7 TV Web. Không sửa NM7 TV Android hoặc NM7 Mobile.
+- **Production:** https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 # Cập nhật mới nhất — bỏ thông báo lỗi HLS tạm thời khi LIVE chuyển proxy (19/10/2026)
 
 - **Hiện tượng:** khi nguồn HLS trực tiếp trả HTTP 403, player tự thử proxy/nguồn dự phòng nhưng toast “HLS HTTP 403 · nguồn trực tiếp lỗi · thử proxy” vẫn nằm trên thanh dưới dù video đã phát từ nguồn 2/2.
