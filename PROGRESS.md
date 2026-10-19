@@ -1,3 +1,15 @@
+## 2026-10-19 — Làm nền thẻ danh sách LIVE trong suốt hơn (đã merge/deploy)
+
+- Giảm alpha nền `.live-row` trong `web-tv/index.html` từ `rgba(8,18,30,.82)` xuống `rgba(8,18,30,.62)` để ảnh nền phong cảnh nhìn rõ hơn, giảm cảm giác tối.
+- Giữ nguyên màu chữ, viền, khoảng cách, bố cục và ba nút thao tác; không đổi LIVE feed, gom sự kiện/server, playback, IPTV hoặc CSS overlay đã nghiệm thu.
+- Bổ sung kiểm tra vào `scripts/test-live-feed.js`: thẻ `.live-row` phải có nền RGBA với alpha trong khoảng 0.50–0.65.
+- PR [#12](https://github.com/cnktvpc/nm7-tv-web/pull/12) đã merge vào `main`; merge commit [`11271fae637491cf8523872d78a288b8ccd9a212`](https://github.com/cnktvpc/nm7-tv-web/commit/11271fae637491cf8523872d78a288b8ccd9a212).
+- **PASS:** [LIVE UI regression #39247374858](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247374858), [JavaScript/Web validation #39247374755](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247374755), [remote + HLS E2E #39247374838](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247374838), [production overlay smoke #39247552237](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247552237), [production verification #39247552234](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39247552234).
+- Cloudflare Worker version 473 nhận 100% lưu lượng. Workflow tổng thể sau đó fail ở smoke nguồn TV preset 1 vì URL upstream không khớp assertion cũ; bước deploy Worker thành công và phần smoke overlay production PASS. Không đổi playlist trong mốc này.
+- Production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 ## Mốc mới nhất — sửa toast 403 tồn đọng khi LIVE tự chuyển proxy/nguồn (19/10/2026)
 
 - **Nguyên nhân theo video:** nguồn HLS trực tiếp trả HTTP 403; player chuyển sang proxy/nguồn 2/2 và video vẫn phát, nhưng `nextCandidate()` vẫn tạo toast lỗi. Các lỗi HLS kế tiếp có thể gia hạn toast cũ, làm người dùng tưởng luồng đang phát vẫn lỗi.
