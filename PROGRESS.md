@@ -1,3 +1,19 @@
+## Mốc mới nhất — sửa toast 403 tồn đọng khi LIVE tự chuyển proxy/nguồn (19/10/2026)
+
+- **Nguyên nhân theo video:** nguồn HLS trực tiếp trả HTTP 403; player chuyển sang proxy/nguồn 2/2 và video vẫn phát, nhưng `nextCandidate()` vẫn tạo toast lỗi. Các lỗi HLS kế tiếp có thể gia hạn toast cũ, làm người dùng tưởng luồng đang phát vẫn lỗi.
+- **Sửa hành vi:** bỏ toast cho các lần tự động retry và chuyển nguồn; ghi nguyên nhân vào debug log. `clearToast()` hủy timer và xóa nội dung khi mở kênh mới cũng như khi playback xác nhận chạy (`markPlaying()`). Nếu mọi candidate đều thất bại, lỗi cuối vẫn hiển thị ở vùng status.
+- **Entry point áp dụng:** `web-tv/app.js`, `web-tv/app-safari-policy.js`, `web-tv/app-safari-policy-mobile-controls.js` và `web-tv/app-safari-policy-pc-controls.js` để không lệch hành vi giữa thiết bị/trình duyệt.
+- **Cache key:** `retryToast=20261019-cleanup1` được thêm vào HTML và URL runtime trong Worker; Cloudflare preflight chạy `scripts/test-playback-startup-fallback.js` cùng regression ẩn metadata.
+- **LIVE/overlay được bảo toàn:** không sửa LIVE feed/parser, server picker, playlist URL, logic IPTV title overlay hoặc các selector CSS đã nghiệm thu.
+- **PR/commit:** [PR #11](https://github.com/cnktvpc/nm7-tv-web/pull/11), merge commit [`fad33e520a9617e8aabfa0a846315e7267af9016`](https://github.com/cnktvpc/nm7-tv-web/commit/fad33e520a9617e8aabfa0a846315e7267af9016).
+- **Kiểm thử regression PASS:** [#39235633554](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633554). Log xác nhận cả bốn runtime player qua kiểm tra và `scripts/test-playback-startup-fallback.js` không còn chấp nhận toast cho retry tự động.
+- **Production smoke PASS:** [#39235633574](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633574) và [#39235633686](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633686). HTML/runtime mobile và PC đã được xác nhận dùng cache key mới.
+- **Browser remote + HLS E2E PASS:** [#39235633510](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633510).
+- **Cloudflare:** Worker version 470 nhận 100% lưu lượng, assets và service bindings vẫn có mặt. Workflow deploy tổng thể vẫn kết thúc lỗi ở assertion nguồn TV preset 1 (test mong URL upstream khác URL Worker hiện trả); Worker đã deploy thành công và lỗi assertion playlist này độc lập với fix toast.
+- **Production URL:** https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 ## Mốc mới nhất — ẩn thanh tiêu đề/URL khi xem kênh IPTV thường; giữ nguyên LIVE (18/10/2026)
 
 - **Kết quả:** đã sửa lỗi thanh tên kênh/URL nguồn do player phủ lên video IPTV thông thường, theo ảnh người dùng gửi (VTV1 HD).
