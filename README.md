@@ -1,3 +1,19 @@
+# Cập nhật mới nhất — bỏ thông báo lỗi HLS tạm thời khi LIVE chuyển proxy (19/10/2026)
+
+- **Hiện tượng:** khi nguồn HLS trực tiếp trả HTTP 403, player tự thử proxy/nguồn dự phòng nhưng toast “HLS HTTP 403 · nguồn trực tiếp lỗi · thử proxy” vẫn nằm trên thanh dưới dù video đã phát từ nguồn 2/2.
+- **Nguyên nhân:** `nextCandidate()` hiển thị toast cho từng lần tự động retry/chuyển nguồn; thông báo cũ có thể được gia hạn bởi sự kiện lỗi kế tiếp và không bị xóa khi playback bắt đầu.
+- **Cách sửa:** tự động retry/chuyển proxy/nguồn chỉ ghi chi tiết vào debug, không phủ toast lỗi lên hình đang phát. Thêm `clearToast()` để hủy timer và xóa thông báo cũ khi mở kênh mới hoặc khi playback được xác nhận qua `markPlaying()`. Nếu mọi nguồn đều thất bại, lỗi cuối vẫn hiện trong vùng trạng thái player.
+- **Giữ nguyên:** không đổi parser/feed LIVE, danh sách server, playlist URL, cấu hình proxy hay các selector CSS ẩn tiêu đề/URL IPTV và LIVE đã nghiệm thu.
+- **Cache/runtime:** HTML và Worker dùng cache key `retryToast=20261019-cleanup1` để tránh tiếp tục tải runtime cũ.
+- **Đã merge vào main:** [PR #11](https://github.com/cnktvpc/nm7-tv-web/pull/11), commit [`fad33e520a9617e8aabfa0a846315e7267af9016`](https://github.com/cnktvpc/nm7-tv-web/commit/fad33e520a9617e8aabfa0a846315e7267af9016).
+- **Regression PASS:** [test player metadata/retry toast #39235633554](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633554); kiểm tra cả bốn runtime player.
+- **Production smoke PASS:** [LIVE overlay/runtime #39235633574](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633574), [production verification #39235633686](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633686); xác nhận HTML và runtime mobile/PC đang dùng cache key mới.
+- **Browser E2E PASS:** [remote + HLS #39235633510](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39235633510); fixture E2E cũng được cập nhật để dùng entrypoint player mobile hiện hành.
+- **Cloudflare:** Worker version 470 đã nhận 100% lưu lượng, assets và service bindings được giữ nguyên. Workflow tổng thể deploy Worker thành công nhưng job sau đó báo lỗi ở assertion nguồn TV preset 1 do upstream thực tế khác URL mà test cũ mong đợi; đây là lỗi kiểm tra nguồn playlist riêng, không liên quan toast và không bị thay đổi trong PR này.
+- **Production:** https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 # Cập nhật mới nhất — ẩn tiêu đề/URL nguồn khi xem IPTV và giữ nguyên LIVE (18/10/2026)
 
 - **Lỗi IPTV đã sửa:** khi xem kênh thông thường, thanh metadata do player tạo ra (tên kênh và URL nguồn ở phía trên video) được ẩn bằng selector `#player:not(.live-playback) #playerTop{display:none!important;}`.
