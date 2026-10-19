@@ -9,20 +9,26 @@ on:
       - fix/live-title-explicit-hide-20261018
     paths:
       - "web-tv/app.js"
+      - "web-tv/app-safari-policy.js"
+      - "web-tv/app-safari-policy-pc-controls.js"
       - "web-tv/app-safari-policy-mobile-controls.js"
       - "web-tv/index.html"
       - "worker.js"
       - "scripts/test-live-player-hide-metadata.js"
+      - "scripts/test-playback-startup-fallback.js"
       - ".github/workflows/test-live-player-metadata.yml"
   pull_request:
     branches:
       - main
     paths:
       - "web-tv/app.js"
+      - "web-tv/app-safari-policy.js"
+      - "web-tv/app-safari-policy-pc-controls.js"
       - "web-tv/app-safari-policy-mobile-controls.js"
       - "web-tv/index.html"
       - "worker.js"
       - "scripts/test-live-player-hide-metadata.js"
+      - "scripts/test-playback-startup-fallback.js"
       - ".github/workflows/test-live-player-metadata.yml"
   workflow_dispatch:
 
@@ -46,5 +52,7 @@ jobs:
           node --check web-tv/app-safari-policy-pc-controls.js
           node --input-type=module --check < worker.js
 
-      - name: Verify LIVE-only metadata hiding
-        run: node scripts/test-live-player-hide-metadata.js
+      - name: Verify player metadata and retry notification behavior
+        run: |
+          node scripts/test-live-player-hide-metadata.js
+          node scripts/test-playback-startup-fallback.js

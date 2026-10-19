@@ -37,6 +37,7 @@ jobs:
           node --check web-tv/app-safari-policy-pc-controls.js
           node --input-type=module --check < worker.js
           node scripts/test-live-player-hide-metadata.js
+          node scripts/test-playback-startup-fallback.js
           echo "NM7_LIVE_TITLE_OVERLAY_SOURCE_TESTS_OK"
 
       - name: Smoke test production HTML and transformed runtime (no deployment)
@@ -44,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          CACHE="20261018-live-hide-overlay6"
+          CACHE="20261018-live-hide-overlay6&retryToast=20261019-cleanup1"
           curl -fsSL --max-time 30 "$BASE/?__nm7_live_overlay_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html
           python3 - <<'PY'
           from pathlib import Path
@@ -53,7 +54,8 @@ jobs:
               '#player.live-playback #playerTop{display:none!important;}',
               '#player.live-playback #playerTitle{display:none!important;}',
               '#player:not(.live-playback) #playerTop{display:none!important;}',
-              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6',
+              'retryToast=20261019-cleanup1',
+              'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6&retryToast=20261019-cleanup1',
           ]
           missing = [marker for marker in required if marker not in html]
           if missing:

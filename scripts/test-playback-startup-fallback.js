@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const files = ['web-tv/app.js', 'web-tv/app-safari-policy.js'];
+const files = ['web-tv/app.js', 'web-tv/app-safari-policy.js', 'web-tv/app-safari-policy-mobile-controls.js', 'web-tv/app-safari-policy-pc-controls.js'];
 
 for (const file of files) {
   const source = fs.readFileSync(file, 'utf8');
@@ -27,8 +27,22 @@ for (const file of files) {
     file + ': SCTV4K does not wait 45 seconds before fallback');
   assert.match(source, /S\.hls!==h/,
     file + ': late events from destroyed HLS instances cannot cancel the current attempt');
-  assert.match(source, /thử '\+\(nextViaProxy\?'proxy':'trực tiếp'\)/,
-    file + ': retry toast reflects whether next attempt is direct or proxied');
+  assert.ok(source.includes("function clearToast(){var t=$('toast');if(toastTimer!==null){clearTimeout(toastTimer);toastTimer=null}if(t){t.className='';t.textContent=''}}"),
+    file + ': stale toast can be dismissed and its timer canceled');
+  assert.ok(source.includes("function markPlaying(gen){if(gen!==S.generation||!S.player)return;if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}clearToast();hideStatus()}"),
+    file + ': successful playback clears stale retry notification');
+  const retryStart = source.indexOf('function nextCandidate(reason){');
+  const retryEnd = source.indexOf('function tryCandidate(){', retryStart);
+  assert.ok(retryStart >= 0 && retryEnd > retryStart, file + ': playback retry handler can be inspected');
+  const retryHandler = source.slice(retryStart, retryEnd);
+  assert.equal(retryHandler.includes('toast('), false,
+    file + ': automatic proxy/source fallback must not leave transient error toasts over working video');
+  assert.ok(retryHandler.includes("dbg('Playback retry:"),
+    file + ': retry reason remains available in debug diagnostics');
+  assert.ok(retryHandler.includes("dbg('Playback fallback:"),
+    file + ': source switching remains available in debug diagnostics');
+  assert.ok(source.includes('clearToast();') && source.includes('S.current=c;'),
+    file + ': opening a new channel clears a stale playback toast');
   assert.match(source, /if\(l\.indexOf\('#EXTHTTP:'\)===0\)/,
     file + ': local M3U parser reads EXTHTTP headers');
   assert.match(source, /headers:Object\.assign\(\{\},headers\)/,
