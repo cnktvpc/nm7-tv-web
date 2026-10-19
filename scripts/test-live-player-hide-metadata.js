@@ -25,6 +25,8 @@ assert.ok(
   'Do not apply a global metadata hide outside the player context'
 );
 assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6'), 'index.html must reference the promoted runtime cache key');
+assert.ok(html.includes('retryToast=20261019-cleanup1'), 'HTML must force clients to load the runtime with playback retry toast cleanup');
+assert.ok(worker.includes('retryToast=20261019-cleanup1'), 'Worker fallback runtime URLs must use the retry toast cache key');
 
 assert.ok(worker.includes('LIVE_PLAYER_OVERLAY_CSS'), 'Worker must apply the same scoped CSS as the working test');
 assert.ok(worker.includes('LIVE_PLAYER_INIT_RE'), 'Worker must support upgrading a stale browser runtime');
