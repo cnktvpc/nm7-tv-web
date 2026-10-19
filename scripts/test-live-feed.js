@@ -80,7 +80,7 @@ assert.match(worker,/p==='\/api\/live-feed'/,'dedicated Worker route exists');
 assert.match(worker,/thethaonm7\.phuongnm7-iptv\.workers\.dev\/playlist\.m3u/,'feed is sourced from the dedicated Live Worker');
 assert.match(html,/id="btnLiveTab"/,'home Live tab exists');
 assert.match(html,/id="liveServerBtn"/,'in-player Live server switch exists');
-const liveRowStyle=html.match(/\.live-row\\{[^}]*background:rgba\\(8,18,30,([0-9.]+)\\)/);
+const liveRowStyle=html.match(/\.live-row\{[^}]*background:rgba\(8,18,30,([0-9.]+)\)/);
 assert.ok(liveRowStyle,'LIVE event cards must define a translucent background');
 assert.ok(Number(liveRowStyle[1])<=0.65&&Number(liveRowStyle[1])>=0.5,'LIVE event card opacity must remain balanced and readable while showing more of the background photo');
 assert.match(html,/live-core-livefix-20261014\.js/,'updated parser uses a unique asset path to avoid stale edge JS');
