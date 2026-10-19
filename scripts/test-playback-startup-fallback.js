@@ -32,16 +32,16 @@ for (const file of files) {
   assert.ok(source.includes("function markPlaying(gen){if(gen!==S.generation||!S.player)return;if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}clearToast();hideStatus()}"),
     file + ': successful playback clears stale retry notification');
   const retryStart = source.indexOf('function nextCandidate(reason){');
-  const retryEnd = source.indexOf('\\nfunction tryCandidate(){', retryStart);
+  const retryEnd = source.indexOf('function tryCandidate(){', retryStart);
   assert.ok(retryStart >= 0 && retryEnd > retryStart, file + ': playback retry handler can be inspected');
   const retryHandler = source.slice(retryStart, retryEnd);
-  assert.doesNotMatch(retryHandler, /\\btoast\\s*\\(/,
+  assert.equal(retryHandler.includes('toast('), false,
     file + ': automatic proxy/source fallback must not leave transient error toasts over working video');
   assert.match(retryHandler, /dbg\\('Playback retry:/,
     file + ': retry reason remains available in debug diagnostics');
   assert.match(retryHandler, /dbg\\('Playback fallback:/,
     file + ': source switching remains available in debug diagnostics');
-  assert.ok(source.includes("clearToast();\\n S.current=c;"),
+  assert.ok(source.includes('clearToast();') && source.includes('S.current=c;'),
     file + ': opening a new channel clears a stale playback toast');
   assert.match(source, /if\(l\.indexOf\('#EXTHTTP:'\)===0\)/,
     file + ': local M3U parser reads EXTHTTP headers');
