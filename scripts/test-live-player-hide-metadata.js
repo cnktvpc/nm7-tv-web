@@ -24,7 +24,7 @@ assert.ok(
   !html.split('\n').some(line => line.trim().startsWith('#playerTop{display:none!important;')),
   'Do not apply a global metadata hide outside the player context'
 );
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-proxy1'), 'index.html must reference the promoted runtime cache key');
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2'), 'index.html must reference the promoted runtime cache key');
 assert.ok(html.includes('retryToast=20261019-cleanup1'), 'HTML must force clients to load the runtime with playback retry toast cleanup');
 assert.ok(worker.includes('retryToast=20261019-cleanup1'), 'Worker fallback runtime URLs must use the retry toast cache key');
 
