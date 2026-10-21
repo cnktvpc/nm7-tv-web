@@ -30,10 +30,22 @@ for (const file of runtimeFiles) {
     file + ': per-channel User-Agent must reach the Worker proxy');
 }
 
+for (const file of runtimeFiles) {
+  const source = fs.readFileSync(file, 'utf8');
+  assert.match(source, /function retryTv360Resolver\\(c,cand,gen,reason\\)/,
+    file + ': runtime must retry transient TV360 resolver errors');
+  assert.match(source, /httpStatus===404&&retryTv360Resolver/,
+    file + ': HLS HTTP 404 must retry the resolver before advancing candidates');
+  assert.match(source, /tv360Http404FromShaka\\(e\\)===404&&retryTv360Resolver/,
+    file + ': Shaka HTTP 404 must trigger the bounded TV360 retry');
+  assert.match(source, /S\\.tv360404RetryCount>=2/,
+    file + ': retries must be bounded at two per resolver URL');
+}
+
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-proxy1&retryToast=20261019-cleanup1'),
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2&retryToast=20261019-cleanup1'),
   'HTML must bump the active runtime cache key for the TV360 fix');
-assert.ok(worker.includes('20261021-tv360-proxy1'),
+assert.ok(worker.includes('20261021-tv360-retry404-2'),
   'Worker PC/mobile runtime fallbacks must use the same cache key');
 
 console.log('TV360_PLAYBACK_ROUTING_REGRESSION_OK');
