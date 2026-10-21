@@ -34,7 +34,7 @@ assert.ok(worker.includes("S.livePlaybackContext?'live-playback':''"), 'Worker f
 assert.ok(worker.includes('liveOverlayHtmlResponse(new Response(page.body'), 'Worker must transform the production homepage');
 assert.ok(worker.includes('LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL'), 'Worker must cover the PC runtime route');
 assert.ok(worker.includes("p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js'"), 'Worker must transform both runtime assets');
-assert.ok(worker.includes('20261018-live-hide-overlay6'), 'Worker must emit the current cache key');
+assert.ok(worker.includes('20261021-tv360-retry404-2'), 'Worker must emit the current cache key');
 
 const initPattern = /S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const originalRuntime = "S.zone='player';$('player').className='';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
