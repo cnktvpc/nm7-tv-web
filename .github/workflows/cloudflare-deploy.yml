@@ -85,6 +85,13 @@ jobs:
           print('TV360_RESOLVER_PROXY_PRODUCTION_SMOKE_OK channels='+','.join(wanted))
           PY
 
+      - name: Smoke test TV360 media manifests and first HLS media segment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/test-tv360-production-manifest.py
+          python3 scripts/test-tv360-production-manifest.py
+
       - name: Deploy dedicated YouTube reverse proxy
         if: github.ref != 'refs/heads/fix/vtv1-single-source-hide-default-urls-20261009'
         uses: cloudflare/wrangler-action@v4
@@ -167,9 +174,13 @@ jobs:
           channels=d.get('channels') or []
           if not channels:
               raise SystemExit('TV default 1 (GitHub-generated VietMiTV playlist) returned zero channels')
-          if d.get('upstream') != 'https://raw.githubusercontent.com/dungntk9/Iptv-phuongnm7/main/IPTV_Gop_VMTTV_vAppTV.m3u':
-              raise SystemExit('TV default 1 did not use the GitHub-generated VietMiTV playlist: '+str(d.get('upstream')))
-          print('TV_VIETMITV_DEFAULT1_SMOKE_OK channels=',len(channels),'upstream=',d.get('upstream'))
+          allowed_upstreams = {
+              'https://nm7-tv-web.vercel.app/api/vietmitv-merge',
+              'https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/',
+          }
+          if d.get('upstream') not in allowed_upstreams:
+              raise SystemExit('TV preset 1 returned an unconfigured upstream: '+str(d.get('upstream')))
+          print('TV_PRESET1_CONFIGURED_UPSTREAM_SMOKE_OK channels=',len(channels),'upstream=',d.get('upstream'))
           PY
           curl -fsSL --max-redirs 3 --max-time 30 "$BASE/api/playlist?source=tv&default=2" -o /tmp/nm7-tv.json
           python3 - <<'PY'
