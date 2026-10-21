@@ -1,3 +1,11 @@
+# Ghi chú kiểm tra bổ sung — TV360+13 có phản hồi 404 không ổn định (21/10/2026)
+
+- Sau một lượt production smoke thành công, lượt kế tiếp trả HTTP 404 cho manifest TV360+13 trong khi playlist metadata và TV360+10 vẫn hợp lệ. Cần chẩn đoán từ resolver/host đích, không thể coi là bài kiểm thử giao diện đơn thuần.
+- Production smoke retry tối đa 3 lần với khoảng nghỉ 1 giây chỉ khi manifest trả 404. Nếu vẫn lỗi, nó gọi `/api/probe` và chỉ ghi status, error hint, loại nội dung và hostname đích; không ghi signed URL hoặc khóa DRM. Kiểm thử vẫn FAIL nếu 404 kéo dài.
+- Chưa tuyên bố TV360+13 hoàn toàn ổn định cho đến khi lượt kiểm tra mới xác minh nguồn trả DASH 200 và các kiểm tra production liên quan PASS.
+
+---
+
 ## 2026-10-21 — TV360 manifests PASS; sửa khớp tên nhóm trong smoke test
 
 - PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) đã merge vào `main` tại commit `50e9a642fa7938fbc47d61bcacfbd55430d0d344`; [PR #15](https://github.com/cnktvpc/nm7-tv-web/pull/15) đã merge tại commit `c74f7b5720a511465840f4490ba4a7a4267387f0`.
