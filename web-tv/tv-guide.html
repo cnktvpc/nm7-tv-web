@@ -72,7 +72,7 @@ button.primary:hover{background:#63ebc0}
 .schedule{margin-top:10px;border-top:1px solid #24374a;padding-top:9px}
 .schedule summary{color:#c8d7e6;font-weight:750;cursor:pointer;font-size:13px;padding:4px 0}
 .program-list{display:grid;gap:6px;margin-top:8px}
-.program{display:grid;grid-template-columns:105px minmax(0,1fr);gap:10px;padding:8px 10px;border-radius:9px;background:#0b1826;border:1px solid transparent}
+.program{display:block;padding:8px 10px;border-radius:9px;background:#0b1826;border:1px solid transparent}.program summary{display:grid;grid-template-columns:105px minmax(0,1fr);gap:10px;list-style:none;cursor:pointer}.program summary::-webkit-details-marker{display:none}
 .program.current{border-color:#286f5d;background:#102b29}
 .program.past{opacity:.62}
 .progtime{color:#aac0d2;font-variant-numeric:tabular-nums;font-size:12px}
@@ -82,7 +82,7 @@ button.primary:hover{background:#63ebc0}
 .empty strong{display:block;color:var(--text);font-size:17px;margin-bottom:7px}
 .footer{color:#7e92a6;font-size:12px;text-align:center;padding:22px 0 8px}
 @media(max-width:800px){.toolbar{grid-template-columns:1fr}.channel-card{grid-template-columns:minmax(0,1fr)}.channel-meta{align-items:center}.watchbtn{width:auto;min-width:116px;margin:0 0 0 auto}.channel-head{display:flex;align-items:center;gap:10px;flex:1;min-width:0}.channel-name{font-size:15px}.channel-card{gap:11px;padding:12px}.logo{width:48px;height:48px;flex-basis:48px}.intro{align-items:flex-start;flex-direction:column}.pill{align-self:flex-start}}
-@media(max-width:480px){.topbar{gap:10px;padding:10px}.brand span:last-child{display:none}.topbar h1{font-size:17px}.homebtn{font-size:12px;padding:8px 10px;min-height:38px}.filters{grid-template-columns:1fr}.daybar button{min-width:42px;padding:8px}.program{grid-template-columns:77px minmax(0,1fr);gap:7px;padding:8px}.program-list{gap:5px}.panel{padding:12px}}
+@media(max-width:480px){.topbar{gap:10px;padding:10px}.brand span:last-child{display:none}.topbar h1{font-size:17px}.homebtn{font-size:12px;padding:8px 10px;min-height:38px}.filters{grid-template-columns:1fr}.daybar button{min-width:42px;padding:8px}.program{padding:8px}.program summary{grid-template-columns:77px minmax(0,1fr);gap:7px}.program-list{gap:5px}.panel{padding:12px}}
 </style>
 </head>
 <body>
@@ -90,7 +90,7 @@ button.primary:hover{background:#63ebc0}
   <a class="brand" href="/" aria-label="NM7 TV - Trang chính"><span class="brandmark">N7</span><span>NM7 TV</span></a>
   <h1>▤ Lịch phát sóng</h1>
   <div class="topspacer"></div>
-  <a class="homebtn" href="/"><button type="button">← Danh sách kênh</button></a>
+  <a class="homebtn" href="/"><span>← Danh sách kênh</span></a>
 </header>
 <main>
   <section class="intro">
