@@ -1,0 +1,26 @@
+name: TV360 Production Manifest Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'worker.js'
+      - 'web-tv/**'
+      - 'scripts/test-tv360-production-manifest.py'
+      - '.github/workflows/cloudflare-deploy.yml'
+      - '.github/workflows/test-tv360-production-manifest.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check smoke script syntax
+        run: python3 -m py_compile scripts/test-tv360-production-manifest.py
+      - name: Test current Cloudflare TV360 manifests and HLS child
+        run: python3 scripts/test-tv360-production-manifest.py
