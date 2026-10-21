@@ -1,4 +1,4 @@
-# Trạng thái mới nhất — TV360 retry đã merge; VTV smoke đã đồng bộ (21/10/2026)
+# Trạng thái mới nhất — chạy guarded Cloudflare deploy cho TV360 runtime (21/10/2026)
 
 - PR [#17](https://github.com/cnktvpc/nm7-tv-web/pull/17) đã merge, thêm retry tối đa 2 lần cho resolver TV360 khi player xác nhận HTTP 404. Bản retry giữ URL nguồn, User-Agent và metadata DRM; chỉ áp dụng NM7 TV Web.
 - Kiểm thử PR trên commit cuối cùng PASS: TV360 routing regression, Web Browser Validation, TV360 Production Manifest Smoke, LIVE metadata regression và Browser remote + HLS E2E.
