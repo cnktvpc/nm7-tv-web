@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
@@ -16,6 +17,30 @@ assert.match(worker, /EPG file too large/, 'EPG proxy must limit downloaded data
 assert.match(worker, /DecompressionStream\('gzip'\)/, 'XMLTV .gz sources must be decompressed');
 assert.match(worker, /tvgName:\(\/tvg-name=/, 'M3U TVG-name must survive parsing for matching');
 assert.match(worker, /Cache-Control':'public, max-age=1800/, 'EPG proxy responses must be cacheable');
+
+// Execute the real URL helpers from worker.js in an isolated Node VM.
+const helperStart = worker.indexOf('function safeEpgUrl(');
+const helperEnd = worker.indexOf('\nfunction isTv360ResolverUrl', helperStart);
+assert.ok(helperStart >= 0 && helperEnd > helperStart, 'Worker EPG URL helpers must be extractable for unit tests');
+const sandbox = { URL };
+vm.createContext(sandbox);
+vm.runInContext(worker.slice(helperStart, helperEnd) +
+  '\nthis.checkEpgUrl=safeEpgUrl; this.checkExtractEpgUrl=extractEpgUrl;', sandbox);
+assert.equal(sandbox.checkEpgUrl('', 'https://playlist.example/playlist.m3u'), '',
+  'empty metadata must not incorrectly resolve to the playlist URL');
+assert.equal(sandbox.checkEpgUrl('http://127.0.0.1/epg.xml'), '',
+  'private/loopback IPs must be rejected');
+assert.equal(sandbox.checkEpgUrl('http://192.168.1.20/epg.xml'), '',
+  'RFC1918 addresses must be rejected');
+assert.equal(sandbox.checkEpgUrl('file:///etc/passwd'), '',
+  'non-HTTP protocols must be rejected');
+assert.equal(sandbox.checkEpgUrl('https://epg.example/guide.xml'), 'https://epg.example/guide.xml');
+assert.equal(sandbox.checkExtractEpgUrl('#EXTM3U', 'https://playlist.example/playlist.m3u'), '',
+  'playlists with no EPG metadata must remain without an EPG URL');
+assert.equal(sandbox.checkExtractEpgUrl('#EXTM3U url-tvg="https://epg.example/guide.xml"',
+  'https://playlist.example/playlist.m3u'), 'https://epg.example/guide.xml');
+assert.equal(sandbox.checkExtractEpgUrl('#EXTM3U x-tvg-url="epg.xml"',
+  'https://playlist.example/playlist.m3u'), 'https://playlist.example/epg.xml');
 
 const html = read('web-tv/tv-guide.html');
 for (const marker of ['id="epgUrl"', 'id="presetSelect"', 'id="groupSelect"', 'id="searchInput"',
