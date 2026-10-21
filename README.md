@@ -1,3 +1,13 @@
+# Trạng thái mới nhất — TV360 retry đã vào main, đang hoàn tất deploy smoke (21/10/2026)
+
+- PR [#17](https://github.com/cnktvpc/nm7-tv-web/pull/17) đã merge, thêm retry tối đa 2 lần cho resolver TV360 khi player xác nhận HTTP 404. Bản retry giữ URL nguồn, User-Agent và metadata DRM; chỉ áp dụng NM7 TV Web.
+- Kiểm thử PR trên commit cuối cùng PASS: TV360 routing regression, Web Browser Validation, TV360 Production Manifest Smoke, LIVE metadata regression và Browser remote + HLS E2E.
+- Lượt deploy trước đó đã qua hai smoke TV360, nhưng workflow tổng thể dừng ở một expectation playlist cũ: smoke yêu cầu VTV6, trong khi upstream hiện trả VTV7–VTV10 và không có VTV6. Nhánh `fix/cloudflare-smoke-current-vtv-20261021` sửa **chỉ bài smoke**, không đổi playlist/kênh.
+- Sau khi PR này merge, chạy lại deploy workflow và xác nhận production smoke lần cuối. Bằng chứng gần nhất: TV360+10 có lúc 404 lần đầu nhưng HLS 200 ở lần thử tiếp theo; đoạn TS 206; TV360+13/+15 DASH 200.
+- Production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 # Trạng thái mới nhất — bổ sung retry 404 TV360 trong player Web (21/10/2026)
 
 - Bản proxy-first đã deploy trên Cloudflare; production smoke đã xác nhận TV360+10 HLS 200 ở lần thử thứ hai sau một 404, segment TS 206, TV360+13/+15 DASH 200.
