@@ -1,3 +1,18 @@
+## 2026-10-21 — Kết quả mới nhất: TV360 production media smoke PASS
+
+- Đã merge PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14), [#15](https://github.com/cnktvpc/nm7-tv-web/pull/15), [#16](https://github.com/cnktvpc/nm7-tv-web/pull/16). PR #14 sửa định tuyến resolver TV360 qua Worker, giữ `Dalvik/2.1.0`, bump cache key; PR #15/#16 bổ sung kiểm tra manifest, retry hữu hạn và sửa smoke assertions cũ.
+- **Lượt production smoke gần nhất (workflow #5) PASS:**
+  - TV360+10: HTTP 404 lần 1, HLS HTTP 200 lần 2.
+  - URI con HLS: HTTP 206, 1024-byte sample, `video/mp2t`.
+  - TV360+13: DASH MPD HTTP 200.
+  - TV360+15: DASH MPD HTTP 200.
+  - Kết quả cuối: `TV360_PRODUCTION_MEDIA_SMOKE_OK`; không phát sinh chẩn đoán lỗi kéo dài.
+- Ý nghĩa: có lúc resolver trả 404 tạm thời, retry ngắn đã lấy được manifest. Nếu 404 tiếp diễn cả ba lần, smoke không bỏ qua mà ghi `/api/probe` safe diagnostic — chỉ trạng thái/loại lỗi/hostname, không ghi URL ký hoặc khóa DRM.
+- **Chưa khẳng định phát end-to-end trên điện thoại người dùng** cho đến khi thử thực tế sau hard refresh. Smoke đã chứng minh manifest HLS/DASH và HLS child có thể tải ở lượt kiểm tra này.
+- **Phạm vi:** NM7 TV Web/Cloudflare only. NM7 TV Android và NM7 Mobile không bị sửa.
+
+---
+
 # Ghi chú kiểm tra bổ sung — TV360+13 có phản hồi 404 không ổn định (21/10/2026)
 
 - Sau một lượt production smoke thành công, lượt kế tiếp trả HTTP 404 cho manifest TV360+13 trong khi playlist metadata và TV360+10 vẫn hợp lệ. Cần chẩn đoán từ resolver/host đích, không thể coi là bài kiểm thử giao diện đơn thuần.
