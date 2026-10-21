@@ -1549,8 +1549,8 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2&retryToast=20261019-cleanup1';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261018-live-hide-overlay6&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='app-safari-policy-mobile-controls.js?v=20261022-epg-guide1&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='app-safari-policy-pc-controls.js?v=20261022-epg-guide1&retryToast=20261019-cleanup1';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
 function noCacheResponseHeaders(sourceHeaders){
