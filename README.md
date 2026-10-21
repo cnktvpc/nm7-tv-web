@@ -1,3 +1,13 @@
+# Cập nhật mới nhất — TV360 Web proxy và manifest đã được xác minh trên production (21/10/2026)
+
+- PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) đã merge và triển khai proxy-first cho resolver TV360; PR [#15](https://github.com/cnktvpc/nm7-tv-web/pull/15) bổ sung kiểm tra manifest thật và sửa assertion preset 1 cũ chỉ trong workflow, không thay đổi URL hay thứ tự nguồn playlist.
+- **Production smoke PASS:** TV360+10 trả HLS HTTP 200; URI media con trả HTTP 206 với dữ liệu TS. TV360+13 và TV360+15 trả DASH MPD HTTP 200. Playlist giữ resolver TV360, `forceProxy=true`, User-Agent `Dalvik/2.1.0` và metadata DASH/ClearKey.
+- Các hồi quy TV360 routing, JavaScript/browser validation và browser remote + HLS E2E đều PASS. Lượt deploy tổng thể sau đó phát hiện thêm assertion cũ phân biệt hoa/thường giữa tên nhóm `Thể Thao`/`Quốc Tế` và giá trị thực tế `Thể thao`/`Quốc tế`; bản sửa tiếp theo chỉ làm smoke test so khớp không phân biệt hoa/thường và xác minh kênh theo tên thực tế.
+- **Phạm vi:** chỉ NM7 TV Web/Cloudflare; không sửa NM7 TV Android hoặc NM7 Mobile. Smoke HTTP xác nhận manifest/segment có thể tải, không thay thế thử phát/giải mã trên điện thoại người dùng.
+- **Production:** https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 # Cập nhật mới nhất — TV360 proxy-first đã deploy, đang xác minh manifest (21/10/2026)
 
 - PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) đã merge vào `main` (commit `50e9a642fa7938fbc47d61bcacfbd55430d0d344`).
