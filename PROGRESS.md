@@ -1,3 +1,13 @@
+## 2026-10-21 — Retry runtime TV360 đã merge; sửa smoke VTV cuối cùng
+
+- PR [#17](https://github.com/cnktvpc/nm7-tv-web/pull/17) đã merge vào `main` tại commit `46665cef5659c9f564c7d8df2c239b06d8f649ca`. Runtime retry đã qua tất cả check PR: TV360 routing, Web Browser Validation, LIVE metadata, Production Manifest Smoke và Browser remote + HLS E2E.
+- Lượt Cloudflare deploy ở commit trước đó deploy Worker và pass cả TV360 routing smoke lẫn manifest smoke, nhưng workflow tổng thể dừng ở assertion VTV6: upstream production có VTV1–VTV5, VTV5 Tây Nam Bộ/Tây Nguyên và VTV7–VTV10; không có VTV6.
+- Nhánh `fix/cloudflare-smoke-current-vtv-20261021` đổi **chỉ** danh sách VTV mà smoke yêu cầu sang danh sách hiện có; không chỉnh playlist, URL nguồn, nhóm, thứ tự hay runtime.
+- Sau merge sẽ kiểm tra lại Cloudflare deploy từ đầu đến cuối. Cần xem deploy + smoke pass trước khi xác nhận runtime retry mới đã có mặt trên production.
+- Phạm vi: NM7 TV Web/Cloudflare only; NM7 TV Android và NM7 Mobile không bị sửa.
+
+---
+
 ## 2026-10-21 — Bổ sung retry runtime cho lỗi 404 TV360
 
 - Bản proxy-first ban đầu đã deploy. Production smoke chứng minh TV360+10 có lúc 404 lần đầu rồi HLS 200 khi thử lại; +13/+15 trả DASH 200.
