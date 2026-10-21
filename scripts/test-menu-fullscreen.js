@@ -12,7 +12,7 @@ assert.ok(html.includes('#playerFullscreenBtn{position:absolute'), 'fullscreen c
 assert.ok(html.includes('opacity:1;visibility:visible;pointer-events:auto'), 'fullscreen button is visible by default');
 assert.ok(html.includes('#player.player-ui-idle #playerFullscreenBtn,#player.player-ui-idle #ctrl{opacity:0;visibility:hidden;pointer-events:none}'), 'desktop fullscreen and nav controls hide together');
 assert.ok(html.includes('#player.player-fullscreen-idle #playerFullscreenBtn{opacity:0;visibility:hidden;pointer-events:none}'), 'mobile fullscreen button has its own idle state without hiding the nav strip');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2'), 'mobile runtime uses a new unique asset path');
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-epg-guide1'), 'mobile runtime uses a new unique asset path');
 
 for (const file of ['web-tv/app.js', 'web-tv/app-safari-policy.js', 'web-tv/app-safari-policy-pc-controls.js', 'web-tv/app-safari-policy-mobile-controls.js']) {
   const source = fs.readFileSync(file, 'utf8');
