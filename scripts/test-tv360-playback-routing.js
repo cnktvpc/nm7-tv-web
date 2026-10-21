@@ -32,13 +32,13 @@ for (const file of runtimeFiles) {
 
 for (const file of runtimeFiles) {
   const source = fs.readFileSync(file, 'utf8');
-  assert.match(source, /function retryTv360Resolver\\(c,cand,gen,reason\\)/,
+  assert.match(source, /function retryTv360Resolver\(c,cand,gen,reason\)/,
     file + ': runtime must retry transient TV360 resolver errors');
   assert.match(source, /httpStatus===404&&retryTv360Resolver/,
     file + ': HLS HTTP 404 must retry the resolver before advancing candidates');
-  assert.match(source, /tv360Http404FromShaka\\(e\\)===404&&retryTv360Resolver/,
+  assert.match(source, /tv360Http404FromShaka\(e\)===404&&retryTv360Resolver/,
     file + ': Shaka HTTP 404 must trigger the bounded TV360 retry');
-  assert.match(source, /S\\.tv360404RetryCount>=2/,
+  assert.match(source, /S\.tv360404RetryCount>=2/,
     file + ': retries must be bounded at two per resolver URL');
 }
 
