@@ -16,7 +16,7 @@ for (const file of files) {
     file + ': timeout reports unconfirmed playback');
   assert.match(source, /var httpStatus=Number\(data&&data\.response/,
     file + ': reads HTTP status from HLS manifest/segment errors');
-  assert.match(source, /if\(httpStatus>=400&&httpStatus<=599\)\{\s*(?:if\(httpStatus===404&&retryTv360Resolver\(c,cand,gen,'HLS HTTP 404'\)return;\s*)?nextCandidate\('HLS HTTP '/,
+  assert.match(source, /if\(httpStatus>=400&&httpStatus<=599\)\{\s*(?:if\(httpStatus===404&&retryTv360Resolver\(c,cand,gen,'HLS HTTP 404'\)\)return;\s*)?nextCandidate\('HLS HTTP '/,
     file + ': does not wait for the 15-second watchdog on explicit HTTP failures');
   assert.match(source, /if\(data&&!S\.proxyAttempt&&data\.type===Hls\.ErrorTypes\.NETWORK_ERROR\)/,
     file + ': direct HLS CORS/network failures switch to proxy before retry backoff');
