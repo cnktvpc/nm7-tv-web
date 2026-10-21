@@ -120,6 +120,7 @@ function norm(c){
  return c
 }
 
+function isTv360ResolverUrl(value){try{var u=new URL(String(value||''));return u.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(u.pathname)}catch(e){return false}}
 function parseM3U(text,base){
  var lines=String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/),out=[],m=null,ua='',ref='',origin='',headers={},manifest='',licenseType='',licenseKey='',epg='';
  function finish(){if(m&&m.candidates.length)out.push(m)}
@@ -175,7 +176,7 @@ function parseM3U(text,base){
    for(var j=1;j<ps.length;j++){
     var z=ps[j],eq=z.indexOf('='),k=eq>0?z.slice(0,eq):'',v=eq>0?decodeURIComponent(z.slice(eq+1)):'';if(/^referer$/i.test(k))r=v;if(/^http-user-agent$/i.test(k))u=v;if(/^origin$/i.test(k))origin=v;
    }
-   var mm=manifest.toLowerCase(),cand={url:url,ref:r,ua:u,headers:Object.assign({},headers),type:mm==='mpd'?'dash':mm==='hls'?'hls':'',dash:mm==='mpd',hls:mm==='hls'||/\.m3u8?(?:$|\?)/i.test(url)||/playlist|index\.m3u|manifest/i.test(url),drm:licenseType&&licenseKey?{type:licenseType,key:licenseKey}:null};
+   var mm=manifest.toLowerCase(),cand={url:url,ref:r,ua:u,headers:Object.assign({},headers),type:mm==='mpd'?'dash':mm==='hls'?'hls':'',dash:mm==='mpd',hls:mm==='hls'||/\.m3u8?(?:$|\?)/i.test(url)||/playlist|index\.m3u|manifest/i.test(url),forceProxy:isTv360ResolverUrl(url),drm:licenseType&&licenseKey?{type:licenseType,key:licenseKey}:null};
    if(origin)cand.headers.Origin=origin;m.candidates.push(cand);
   }
  }
