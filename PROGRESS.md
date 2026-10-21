@@ -1,3 +1,14 @@
+## 2026-10-21 — TV360 manifests PASS; sửa khớp tên nhóm trong smoke test
+
+- PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) đã merge vào `main` tại commit `50e9a642fa7938fbc47d61bcacfbd55430d0d344`; [PR #15](https://github.com/cnktvpc/nm7-tv-web/pull/15) đã merge tại commit `c74f7b5720a511465840f4490ba4a7a4267387f0`.
+- **Production verification PASS:** resolver + UA + `forceProxy` cho TV360+10/+13/+15; +10 HLS manifest HTTP 200; HLS child media HTTP 206, 1024 byte sample, MIME `video/mp2t`; +13/+15 DASH MPD HTTP 200; playlist ClearKey metadata còn nguyên. Marker cuối: `TV360_PRODUCTION_MEDIA_SMOKE_OK`.
+- Sau khi deploy, workflow còn fail tại assertion tên nhóm phân biệt hoa/thường: cấu hình hiện trả `Thể thao` và `Quốc tế`, còn bài smoke mong `Thể Thao` và `Quốc Tế`. Đây là smoke test cũ, không phải lỗi phát TV360. Nhánh `fix/cloudflare-smoke-group-casefold-20261021` cập nhật so sánh nhóm không phân biệt hoa/thường và kiểm tra `SCTV Phim Tổng Hợp` theo tên kênh, không đổi playlist, nhóm, thứ tự hoặc upstream.
+- Các kiểm tra PR trước đó PASS: `TV360 Production Manifest Smoke`, `Web Browser Validation`, `Browser remote + HLS E2E`.
+- **Trạng thái:** phần proxy/manifest đã triển khai và được xác minh bằng HTTP production smoke. Chờ workflow tổng thể chạy lại sau khi sửa assertion nhóm; cần xác nhận phát thật trên thiết bị sau hard refresh.
+- **Phạm vi:** NM7 TV Web/Cloudflare only. NM7 TV Android và NM7 Mobile không bị sửa.
+
+---
+
 ## 2026-10-21 — TV360 proxy-first fix merged; checking real manifests
 
 - PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) merged to `main` as commit [`50e9a642fa7938fbc47d61bcacfbd55430d0d344`](https://github.com/cnktvpc/nm7-tv-web/commit/50e9a642fa7938fbc47d61bcacfbd55430d0d344).
