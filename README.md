@@ -1,3 +1,12 @@
+# Trạng thái mới nhất — bổ sung retry 404 TV360 trong player Web (21/10/2026)
+
+- Bản proxy-first đã deploy trên Cloudflare; production smoke đã xác nhận TV360+10 HLS 200 ở lần thử thứ hai sau một 404, segment TS 206, TV360+13/+15 DASH 200.
+- **Bản cập nhật kế tiếp đang ở nhánh kiểm thử** `fix/tv360-runtime-404-retry-20261021`: player sẽ thử lại cùng resolver TV360 tối đa 2 lần khi HLS.js/Shaka xác định HTTP 404 (native HLS dùng retry giới hạn cho đúng resolver). Nếu vẫn lỗi, luồng lỗi/fallback bình thường tiếp tục.
+- Cache key được bump để client tải JavaScript mới. Cần chạy regression và production smoke sau merge/deploy rồi thử lại thực tế trên điện thoại.
+- Không đổi URL playlist, User-Agent `Dalvik/2.1.0`, khóa DRM hoặc nhóm kênh. Chỉ NM7 TV Web/Cloudflare; NM7 TV Android và NM7 Mobile không bị sửa.
+
+---
+
 # Trạng thái mới nhất — TV360 Web đã qua production media smoke (21/10/2026)
 
 - **Bản sửa runtime đã deploy** tại Cloudflare Worker [nm7-tv-web.phuongnm7-iptv.workers.dev](https://nm7-tv-web.phuongnm7-iptv.workers.dev/). PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14), [#15](https://github.com/cnktvpc/nm7-tv-web/pull/15) và [#16](https://github.com/cnktvpc/nm7-tv-web/pull/16) đã merge.

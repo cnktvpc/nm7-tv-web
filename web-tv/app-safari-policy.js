@@ -42,6 +42,8 @@ var S={
  candidateIndex:0,
  proxyAttempt:false,
  retryPending:false,
+ tv360404RetryCount:0,
+ tv360404RetryKey:'',
  watchdog:null,
  drmRecoveryCount:0,
  drmHardRecoveryCount:0,
@@ -833,7 +835,7 @@ function openPlayer(c){
  c=sanitizeAppleCandidates(c);
  if(!c||!c.candidates||!c.candidates.length){toast('Kênh chưa có URL phát');return}
  clearToast();
- S.current=c;S.candidateIndex=startupCandidateIndex(c);S.attemptStep=0;if(S.livePlaybackContext&&window.NM7LiveUI&&window.NM7LiveUI.onPlayerStarted)window.NM7LiveUI.onPlayerStarted(String(c.liveEventId||c.id||''));S.proxyAttempt=false;S.retryPending=false;S.player=true;S.drmRecoveryCount=0;S.drmHardRecoveryCount=0;S.drmStallAnchor=0;S.drmStallSince=0;S.audioMutedByPolicy=false;S.ctrl=false;S.quick=false;S.generation++;
+ S.current=c;S.candidateIndex=startupCandidateIndex(c);S.attemptStep=0;if(S.livePlaybackContext&&window.NM7LiveUI&&window.NM7LiveUI.onPlayerStarted)window.NM7LiveUI.onPlayerStarted(String(c.liveEventId||c.id||''));S.proxyAttempt=false;S.retryPending=false;S.tv360404RetryCount=0;S.tv360404RetryKey='';S.player=true;S.drmRecoveryCount=0;S.drmHardRecoveryCount=0;S.drmStallAnchor=0;S.drmStallSince=0;S.audioMutedByPolicy=false;S.ctrl=false;S.quick=false;S.generation++;
  S.zone='player';$('player').className='';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();
  var liveServerButton=$('liveServerBtn');if(liveServerButton)liveServerButton.className=S.livePlaybackContext?'cb':'cb hidden';
  $('playerTitle').textContent=c.name;$('playerMeta').textContent=c.url||'';
@@ -865,6 +867,46 @@ function isStalkerTsCandidate(cand,kind){
   var u=new URL(String(cand.resolvedUrl||cand.url||'')),q=u.searchParams;
   return u.pathname.toLowerCase().endsWith('/play/live.php')&&q.has('mac')&&q.has('stream')&&q.has('extension')&&(q.has('play_token')||q.has('token'));
  }catch(e){return false}
+}
+function tv360Http404FromShaka(e){
+ var todo=[e&&e.data],seen=0;
+ while(todo.length&&seen++<64){
+  var value=todo.shift();
+  if(!value)continue;
+  if(typeof value==='string'){
+   if(/(?:http|status|response)[^0-9]{0,24}404/i.test(value))return 404;
+   continue;
+  }
+  if(Array.isArray(value)){
+   for(var i=0;i<value.length;i++)if(value[i]&&(typeof value[i]==='object'||typeof value[i]==='string'))todo.push(value[i]);
+   continue;
+  }
+  if(typeof value!=='object')continue;
+  for(var k of ['status','statusCode','httpStatus','responseCode'])if(Number(value[k])===404)return 404;
+  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'))todo.push(value[k]);
+ }
+ return 0
+}
+function retryTv360Resolver(c,cand,gen,reason){
+ if(gen!==S.generation||!S.player||!cand||!isTv360ResolverUrl(String(cand.url||''))||cand.forceProxy!==true||!S.proxyAttempt)return false;
+ if(S.retryPending)return true;
+ var key=String(c.id||c.name||'')+'|'+String(cand.url||'');
+ if(S.tv360404RetryKey!==key){S.tv360404RetryKey=key;S.tv360404RetryCount=0}
+ if(S.tv360404RetryCount>=2)return false;
+ S.tv360404RetryCount++;
+ var attempt=S.tv360404RetryCount;
+ if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}
+ clearPlayers();
+ S.attemptStep=0;
+ S.retryPending=true;
+ setStatus('TV360 tạm lỗi · thử lại '+attempt+'/2\n'+c.name);
+ dbg('TV360 resolver retry '+attempt+'/2 '+String(reason||'HTTP 404'));
+ setTimeout(function(){
+  if(gen!==S.generation||!S.player)return;
+  S.retryPending=false;
+  tryCandidate();
+ },400*attempt);
+ return true
 }
 function nextCandidate(reason){
  if(!S.player||S.retryPending)return;
@@ -999,6 +1041,7 @@ function startHls(c,cand,url,gen){
     }catch(e){nextCandidate('HLS proxy lỗi')}
     return
    }
+   if(retryTv360Resolver(c,cand,gen,'HLS native error'))return;
    nextCandidate('HLS native lỗi')
   };
   v.src=url;
@@ -1033,6 +1076,7 @@ function tryHlsJs(c,cand,url,gen){
    // Do not wait for HLS.js retry backoff when an upstream explicitly rejects
    // the manifest/segment. Switch direct <-> proxy immediately on HTTP 4xx/5xx.
    if(httpStatus>=400&&httpStatus<=599){
+    if(httpStatus===404&&retryTv360Resolver(c,cand,gen,'HLS HTTP 404'))return;
     nextCandidate('HLS HTTP '+httpStatus+' · '+(S.proxyAttempt?'proxy lỗi':'nguồn trực tiếp lỗi'));
     return;
    }
@@ -1365,6 +1409,7 @@ function startShaka(c,cand,url,drm,gen){
     setStatus('DRM lỗi '+code+'\n'+c.name);
     return;
    }
+   if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka HTTP 404'))return;
    nextCandidate('DASH/DRM lỗi '+code);
   });
 
@@ -1374,6 +1419,7 @@ function startShaka(c,cand,url,drm,gen){
   }).catch(function(e){
    if(gen!==S.generation)return;
    dbg('Shaka load '+(e.code||'')+' cat='+(e.category||'')+' '+(e.message||''));
+   if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP 404'))return;
    if(appleDrm){
     if(transientDrmError(e)&&retryDrmInPlace(c,cand,url,p,gen,e))return;
     if(hardRestartDrm(c,cand,gen,'load failure '+(e.code||'')))return;

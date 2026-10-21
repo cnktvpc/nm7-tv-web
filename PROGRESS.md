@@ -1,3 +1,13 @@
+## 2026-10-21 — Bổ sung retry runtime cho lỗi 404 TV360
+
+- Bản proxy-first ban đầu đã deploy. Production smoke chứng minh TV360+10 có lúc 404 lần đầu rồi HLS 200 khi thử lại; +13/+15 trả DASH 200.
+- Nhánh `fix/tv360-runtime-404-retry-20261021` bổ sung retry cùng resolver trong player: HLS.js chỉ retry khi HTTP status là 404; Shaka retry khi status 404 có trong error data; native HLS có retry giới hạn trên đúng URL resolver TV360. Tối đa 2 lần, không lặp vô hạn.
+- Các thay đổi được đồng bộ trong bốn runtime Web; bump cache key thành `20261021-tv360-retry404-2`; regression test kiểm tra call-sites và giới hạn retry; Cloudflare workflow đã chạy test regression.
+- **Trạng thái:** đang kiểm thử PR trước khi deploy bản retry runtime. Không đánh dấu hoàn tất trước khi các check PASS và production smoke chạy lại.
+- **Phạm vi:** NM7 TV Web/Cloudflare. NM7 TV Android và NM7 Mobile không bị sửa.
+
+---
+
 ## 2026-10-21 — Kết quả mới nhất: TV360 production media smoke PASS
 
 - Đã merge PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14), [#15](https://github.com/cnktvpc/nm7-tv-web/pull/15), [#16](https://github.com/cnktvpc/nm7-tv-web/pull/16). PR #14 sửa định tuyến resolver TV360 qua Worker, giữ `Dalvik/2.1.0`, bump cache key; PR #15/#16 bổ sung kiểm tra manifest, retry hữu hạn và sửa smoke assertions cũ.
