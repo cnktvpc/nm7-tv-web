@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urljoin, urlparse
 
@@ -15,7 +16,7 @@ def fail(message):
     raise SystemExit("TV360_PRODUCTION_MEDIA_SMOKE_FAIL: " + message)
 
 
-def http_get(url, label, byte_range=None):
+def http_get(url, label, byte_range=None, allow_http_errors=False):
     out = Path("/tmp") / ("nm7-tv360-" + re.sub(r"[^a-z0-9-]", "-", label.lower()) + ".bin")
     command = [
         "curl", "-sS", "--max-redirs", "4", "--connect-timeout", "8",
@@ -31,15 +32,35 @@ def http_get(url, label, byte_range=None):
     if len(parts) != 2:
         fail(f"{label}: no HTTP status returned")
     status, content_type = parts[0].splitlines()[-1], parts[1]
-    if status not in ("200", "206"):
-        fail(f"{label}: HTTP {status}")
     try:
         body = out.read_bytes()
     except OSError:
         fail(f"{label}: response body missing")
-    if not body:
+    if not body and not allow_http_errors:
         fail(f"{label}: empty response body")
+    if status not in ("200", "206") and not allow_http_errors:
+        fail(f"{label}: HTTP {status}")
     return int(status), content_type, body
+
+    
+def diagnose_resolver(channel_id):
+    """Log safe resolver diagnostics, without signed URLs or DRM key material."""
+    resolver = RESOLVER.format(channel_id=channel_id)
+    endpoint = BASE_URL + "/api/probe?u=" + quote(resolver, safe="") + "&ua=" + quote(USER_AGENT, safe="")
+    try:
+        status, _, body = http_get(endpoint, "resolver-probe-" + channel_id, allow_http_errors=True)
+        data = json.loads(body.decode("utf-8", errors="replace"))
+        fields = ("type", "status", "headStatus", "getStatus", "errorHint", "bodyClass", "finalHost")
+        safe = {key: data.get(key) for key in fields}
+        safe["probeHttp"] = status
+        safe["channel"] = "TV360+" + channel_id
+        print("TV360_RESOLVER_SAFE_DIAGNOSTIC " + json.dumps(safe, ensure_ascii=False, sort_keys=True))
+    except Exception as error:
+        print("TV360_RESOLVER_SAFE_DIAGNOSTIC " + json.dumps({
+            "channel": "TV360+" + channel_id,
+            "diagnostic": "probe-unavailable",
+            "errorClass": type(error).__name__,
+        }, ensure_ascii=False, sort_keys=True))
 
 
 def media_kind(body):
@@ -100,14 +121,26 @@ def check_manifest(channel_id):
     label = "TV360+" + channel_id
     upstream = RESOLVER.format(channel_id=channel_id)
     endpoint = BASE_URL + "/api/stream?u=" + quote(upstream, safe="") + "&ua=" + quote(USER_AGENT, safe="")
-    status, content_type, body = http_get(endpoint, label + "-manifest")
-    kind = media_kind(body)
-    if not kind:
-        fail(label + f": HTTP {status} did not return an HLS or DASH manifest (content-type={content_type or 'unknown'})")
-    if channel_id in ("13", "15") and kind != "dash":
-        fail(label + f": playlist declares DASH/DRM but proxy returned {kind.upper()} manifest")
-    print(f"TV360_MANIFEST_OK {label} http={status} kind={kind} content_type={content_type or 'unknown'}")
-    return kind, body
+    last = None
+    for attempt in range(1, 4):
+        last = http_get(endpoint, label + "-manifest-attempt-" + str(attempt), allow_http_errors=True)
+        status, content_type, body = last
+        if status in (200, 206):
+            kind = media_kind(body)
+            if not kind:
+                fail(label + f": HTTP {status} did not return an HLS or DASH manifest (content-type={content_type or 'unknown'})")
+            if channel_id in ("13", "15") and kind != "dash":
+                fail(label + f": playlist declares DASH/DRM but proxy returned {kind.upper()} manifest")
+            print(f"TV360_MANIFEST_OK {label} http={status} kind={kind} content_type={content_type or 'unknown'} attempt={attempt}")
+            return kind, body
+        print(f"TV360_MANIFEST_RETRY {label} http={status} attempt={attempt}/3")
+        if status != 404:
+            break
+        if attempt < 3:
+            time.sleep(1)
+    diagnose_resolver(channel_id)
+    status, content_type, _ = last
+    fail(label + f": upstream/proxy returned HTTP {status} after bounded retries (content-type={content_type or 'unknown'}); see safe resolver diagnostic above")
 
 
 def check_hls_child(body):

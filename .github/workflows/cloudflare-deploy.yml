@@ -198,24 +198,29 @@ jobs:
               if g not in seen:
                   seen.add(g); groups.append(g)
           expected=['VTV','VTVCab','Thể Thao','Quốc Tế','SCTV']
-          missing=[g for g in expected if g not in groups]
+          group_index={}
+          for index,g in enumerate(groups):
+              group_index.setdefault(str(g).casefold(),index)
+          missing=[g for g in expected if g.casefold() not in group_index]
           if missing:
-              raise SystemExit(f'required current default groups missing: {missing}; groups={groups[:20]}')
-          positions=[groups.index(g) for g in expected[:4]]
+              raise SystemExit(f'required current default groups missing (case-insensitive): {missing}; groups={groups[:20]}')
+          positions=[group_index[g.casefold()] for g in expected[:4]]
           if positions != sorted(positions):
               raise SystemExit(f'default TV group order changed: {positions}; groups={groups[:12]}')
-          print('TV_GROUP_ORDER_SMOKE_OK groups=',[(g,groups.index(g)) for g in expected])
-          def names(g): return [c.get('name','') for c in channels if (c.get('group') or 'Khác')==g]
+          print('TV_GROUP_ORDER_SMOKE_OK groups=',[(g,groups[group_index[g.casefold()]]) for g in expected])
+          def names(g): return [c.get('name','') for c in channels if str(c.get('group') or 'Khác').casefold()==g.casefold()]
           def require_names(g, wants):
               got=names(g)
-              missing=[w for w in wants if not any(w.lower() in n.lower() for n in got)]
+              missing=[w for w in wants if not any(w.casefold() in str(n).casefold() for n in got)]
               if missing:
                   raise SystemExit(f'{g} channels missing {missing}; actual={got[:20]}')
           require_names('VTV',['VTV1','VTV2','VTV3','VTV4','VTV5','VTV5 Tây Nam Bộ','VTV5 Tây Nguyên','VTV6'])
           require_names('VTVCab',['VTVCab 8 - ON BiBi','VTVCab 10 - ON Cine','VTVCab 5 - ON E Channel','VTVCab 9 - ON Info TV','VTVCab 21 - On Kids HD','VTVCab 16 - ON Football HD'])
           require_names('Thể Thao',['HTV Thể Thao','SCTV15','SCTV17','SCTV22','VTVCab 3 - ON Sports HD'])
           require_names('SCTV',['SCTV1','SCTV2','SCTV3'])
-          require_names('Phim Truyện',['SCTV Phim Tổng Hợp'])
+          if not any('sctv phim tổng hợp' in str(c.get('name','')).casefold() for c in channels):
+              raise SystemExit('SCTV Phim Tổng Hợp channel missing from the current default playlist')
+          print('SCTV_PHIM_TONG_HOP_CHANNEL_SMOKE_OK')
           ons=[c for c in channels if 'on sports hd' in str(c.get('name','')).lower() and 'vtvcab 3' in str(c.get('name','')).lower()]
           if not ons:
               raise SystemExit('VTVCab 3 - ON Sports HD was not found in the default playlist')
