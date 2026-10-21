@@ -1,3 +1,13 @@
+# Cập nhật mới nhất — TV360 proxy-first đã deploy, đang xác minh manifest (21/10/2026)
+
+- PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) đã merge vào `main` (commit `50e9a642fa7938fbc47d61bcacfbd55430d0d344`).
+- Production smoke sau deploy đã xác nhận TV360+10, +13 và +15 giữ đúng resolver `vmttv.dpdns.org/tv360/`, `forceProxy=true` và User-Agent `Dalvik/2.1.0`.
+- Job tổng thể vẫn báo lỗi do assertion cũ của preset 1 so URL trả về với GitHub raw URL đã cũ; API thực tế dùng fallback đã khai báo `phuongnm7-playlist.phuongnm7-iptv.workers.dev`. Bản sửa tiếp theo chỉ đồng bộ kiểm thử, không thay URL nguồn hoặc thứ tự playlist.
+- Đã thêm smoke kiểm tra manifest thật qua Cloudflare `/api/stream` cho TV360+10/+13/+15, HLS URI con và metadata DASH/ClearKey; trạng thái phát thực tế sẽ được ghi sau khi smoke chạy xong.
+- Chỉ thay đổi NM7 TV Web/Cloudflare; không sửa NM7 TV Android hay NM7 Mobile.
+
+---
+
 # Cập nhật mới nhất — xử lý lỗi phát Sự kiện TV360 trên NM7 TV Web (21/10/2026)
 
 - **Lỗi theo ảnh kiểm thử:** TV360+10 báo HLS HTTP 404 khi chuyển proxy; TV360+13 báo lỗi khởi tạo Shaka; TV360+15 báo DASH/DRM lỗi 7001.
