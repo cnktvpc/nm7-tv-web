@@ -50,10 +50,32 @@ jobs:
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
           KEY="20261021-tv360-retry404-2"
-          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__tv360_runtime_deploy_smoke=$(date +%s)" -o /tmp/nm7-home.html
-          grep -q "app-safari-policy-mobile-controls.js?v=$KEY" /tmp/nm7-home.html
-          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=$KEY&retryToast=20261019-cleanup1" -o /tmp/nm7-mobile-runtime.js
-          grep -q "function retryTv360Resolver(c,cand,gen,reason)" /tmp/nm7-mobile-runtime.js
-          grep -q "TV360 tạm lỗi" /tmp/nm7-mobile-runtime.js
+          # Static asset availability can lag briefly after a successful Wrangler deployment.
+          home_ok=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__tv360_runtime_deploy_smoke=$(date +%s)-$attempt" -o /tmp/nm7-home.html; then
+              if grep -q "app-safari-policy-mobile-controls.js?v=$KEY" /tmp/nm7-home.html; then
+                home_ok=1
+                break
+              fi
+            fi
+            echo "TV360_DEPLOY_HOME_WAIT attempt=$attempt/8"
+            sleep 2
+          done
+          test "$home_ok" = "1" || { echo "TV360_DEPLOY_HOME_FAIL: new runtime cache key never appeared"; exit 1; }
+
+          runtime_ok=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=$KEY&retryToast=20261019-cleanup1&__deploy_smoke=$attempt" -o /tmp/nm7-mobile-runtime.js; then
+              if grep -q "function retryTv360Resolver(c,cand,gen,reason)" /tmp/nm7-mobile-runtime.js && grep -q "TV360 tạm lỗi" /tmp/nm7-mobile-runtime.js; then
+                runtime_ok=1
+                break
+              fi
+            fi
+            echo "TV360_DEPLOY_RUNTIME_WAIT attempt=$attempt/8"
+            sleep 2
+          done
+          test "$runtime_ok" = "1" || { echo "TV360_DEPLOY_RUNTIME_FAIL: retry helper not served after deploy"; exit 1; }
+
           python3 scripts/test-tv360-production-manifest.py
           echo "NM7_TV360_RUNTIME_DEPLOY_AND_MEDIA_SMOKE_OK"
