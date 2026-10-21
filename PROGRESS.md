@@ -1,10 +1,13 @@
-## 2026-10-21 — Retry runtime TV360 đã merge; sửa smoke VTV cuối cùng
+## 2026-10-21 — Hoàn tất deploy runtime retry TV360 và xác minh production
 
-- PR [#17](https://github.com/cnktvpc/nm7-tv-web/pull/17) đã merge vào `main` tại commit `46665cef5659c9f564c7d8df2c239b06d8f649ca`. Runtime retry đã qua tất cả check PR: TV360 routing, Web Browser Validation, LIVE metadata, Production Manifest Smoke và Browser remote + HLS E2E.
-- Lượt Cloudflare deploy ở commit trước đó deploy Worker và pass cả TV360 routing smoke lẫn manifest smoke, nhưng workflow tổng thể dừng ở assertion VTV6: upstream production có VTV1–VTV5, VTV5 Tây Nam Bộ/Tây Nguyên và VTV7–VTV10; không có VTV6.
-- Nhánh `fix/cloudflare-smoke-current-vtv-20261021` đổi **chỉ** danh sách VTV mà smoke yêu cầu sang danh sách hiện có; không chỉnh playlist, URL nguồn, nhóm, thứ tự hay runtime.
-- Sau merge sẽ kiểm tra lại Cloudflare deploy từ đầu đến cuối. Cần xem deploy + smoke pass trước khi xác nhận runtime retry mới đã có mặt trên production.
+- **Deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã chạy Wrangler thành công. Cloudflare Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.
+- Smoke xác nhận homepage phục vụ cache key `20261021-tv360-retry404-2`; file runtime mobile chứa `retryTv360Resolver` và thông báo retry.
+- **Production media smoke PASS:** +10 HLS HTTP 200; HLS child HTTP 206, MIME `video/mp2t`; +13 trả HTTP 404 ở lần thử 1 rồi DASH MPD HTTP 200 ở lần thử 2; +15 DASH MPD HTTP 200. Marker: `TV360_PRODUCTION_MEDIA_SMOKE_OK` và `NM7_TV360_RUNTIME_DEPLOY_AND_MEDIA_SMOKE_OK`.
+- Retry player giới hạn 2 lần cho resolver TV360 khi HTTP 404 được xác nhận. Giữ proxy-first, UA `Dalvik/2.1.0`, URL playlist và metadata ClearKey; nếu retry hết, luồng fallback/lỗi bình thường tiếp tục.
+- PR #17 runtime retry, PR #18 VTV smoke alignment và PR #19 guarded deploy workflow đã merge. Kiểm thử liên quan đã PASS: Web Browser Validation, TV360 Routing Regression, LIVE metadata regression và Browser remote + HLS E2E.
+- **Chưa xác minh playback hình/tiếng trên thiết bị người dùng**; production smoke xác nhận tải được manifest/segment. Sau hard refresh cần thử TV360+10/+13/+15 thực tế.
 - Phạm vi: NM7 TV Web/Cloudflare only; NM7 TV Android và NM7 Mobile không bị sửa.
+
 
 ---
 
