@@ -36,7 +36,7 @@ def http_get(url, label, byte_range=None, allow_http_errors=False):
         body = out.read_bytes()
     except OSError:
         fail(f"{label}: response body missing")
-    if not body:
+    if not body and not allow_http_errors:
         fail(f"{label}: empty response body")
     if status not in ("200", "206") and not allow_http_errors:
         fail(f"{label}: HTTP {status}")
