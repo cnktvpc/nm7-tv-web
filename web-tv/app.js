@@ -639,7 +639,7 @@ function fallbackOriginal(cached,firstError){
  var u='https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/';
  fetch(u,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(t){
   var p=parseM3U(t,u);if(!p.channels.length||!isAndroid1069DefaultList(p.channels))throw new Error('nguồn mặc định không đúng');if(p.epgUrl)rememberEpgUrl(p.epgUrl);
-  S.list=p.channels;S.row=0;S.col=0;rebuildGroups();renderHome();saveCache();toast('Đã mở nguồn mặc định Android 1.0.69 · '+S.list.length+' kênh')
+  S.list=p.channels;S.row=0;S.col=0;rebuildGroups();renderHome();saveCache();openPendingGuideChannel();toast('Đã mở nguồn mặc định Android 1.0.69 · '+S.list.length+' kênh')
  }).catch(function(e){
   if(cached&&cached.channels.length&&isAndroid1069DefaultList(cached.channels)){toast('Nguồn mới lỗi · giữ playlist 1.0.69')}
   else toast('Không tải được nguồn mặc định: '+(firstError&&firstError.message||e.message));
