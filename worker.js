@@ -27,7 +27,8 @@ function isHttp(u){return /^https?:\/\//i.test(String(u||''))}
 function safeUrl(u,b){try{return new URL(u,b).toString()}catch{return String(u||'')}}
 function safeEpgUrl(value,base=''){
   try{
-    const u=new URL(String(value||'').trim(),base||undefined),protocol=u.protocol.toLowerCase();
+    const raw=String(value||'').trim();if(!raw)return '';
+    const u=new URL(raw,base||undefined),protocol=u.protocol.toLowerCase();
     if(protocol!=='https:'&&protocol!=='http:')return '';
     if(u.username||u.password||u.href.length>4096)return '';
     if((protocol==='https:'&&u.port&&u.port!=='443')||(protocol==='http:'&&u.port&&u.port!=='80'))return '';
@@ -244,7 +245,7 @@ async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=fa
     const useBinding=source==='tv'&&target==='https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/'&&env?.PLAYLIST_SOURCE;
     const r=useBinding
       ?await env.PLAYLIST_SOURCE.fetch(new Request(target,init))
-      :await fetchPlaylistTarget(target,init,env,10000);if(!r.ok)throw new Error('HTTP '+r.status);const body=await r.text();const epgUrl=extractEpgUrl(body,target);let channels=parseM3U(body,target);if(!channels.length){try{const j=JSON.parse(body),arr=Array.isArray(j)?j:(Array.isArray(j.channels)?j.channels:Array.isArray(j.data)?j.data:[]);channels=arr.map(x=>({name:String(x.name||x.title||x.channel||'Kênh'),group:String(x.group||x.groupTitle||x.category||'Khác'),logo:String(x.logo||x.tvgLogo||''),id:String(x.id||x.tvgId||x.name||x.title||''),tvgName:String(x.tvgName||x.tvg_name||''),candidates:Array.isArray(x.candidates)?x.candidates:(x.url||x.stream||x.src?[{url:x.url||x.stream||x.src,ref:x.ref||x.referer||'',ua:x.ua||x.userAgent||'',headers:x.headers||{},type:x.type||'',dash:x.type==='dash',hls:x.type==='hls'}]:[])}))}catch{}}if(!channels.length)throw new Error('playlist rỗng');
+      :await fetchPlaylistTarget(target,init,env,10000);if(!r.ok)throw new Error('HTTP '+r.status);const body=await r.text();let epgUrl=extractEpgUrl(body,target);let channels=parseM3U(body,target);if(!channels.length){try{const j=JSON.parse(body),arr=Array.isArray(j)?j:(Array.isArray(j.channels)?j.channels:Array.isArray(j.data)?j.data:[]);if(j&&typeof j==='object')epgUrl=epgUrl||safeEpgUrl(j.epgUrl||j.urlTvg||j.xTvgUrl||j.url_tvg||j.x_tvg_url,target);channels=arr.map(x=>({name:String(x.name||x.title||x.channel||'Kênh'),group:String(x.group||x.groupTitle||x.category||'Khác'),logo:String(x.logo||x.tvgLogo||''),id:String(x.id||x.tvgId||x.name||x.title||''),tvgName:String(x.tvgName||x.tvg_name||''),candidates:Array.isArray(x.candidates)?x.candidates:(x.url||x.stream||x.src?[{url:x.url||x.stream||x.src,ref:x.ref||x.referer||'',ua:x.ua||x.userAgent||'',headers:x.headers||{},type:x.type||'',dash:x.type==='dash',hls:x.type==='hls'}]:[])}))}catch{}}if(!channels.length)throw new Error('playlist rỗng');
     enrichChannels(channels);
     playlistCache.set(cacheKey,{time:now,channels,upstream:target,epgUrl});
     return new Response(JSON.stringify({channels,source,cached:false,preset:isDefault?preset:undefined,upstream:target,epgUrl,refreshed:forceRefresh}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch(e){errors.push(target+': '+e.message)}}
@@ -593,11 +594,12 @@ async function sourceResponse(q,env=null){
       if(i+1<attempts.length)continue;
       break;
     }
-    const epgUrl=extractEpgUrl(body,lastUrl);let channels=parseM3U(body,lastUrl);
+    let epgUrl=extractEpgUrl(body,lastUrl);let channels=parseM3U(body,lastUrl);
     if(!channels.length){
       try{
         const j=JSON.parse(body);
         const arr=Array.isArray(j)?j:(Array.isArray(j.channels)?j.channels:Array.isArray(j.data)?j.data:[]);
+        if(j&&typeof j==='object')epgUrl=epgUrl||safeEpgUrl(j.epgUrl||j.urlTvg||j.xTvgUrl||j.url_tvg||j.x_tvg_url,lastUrl);
         channels=arr.map(x=>({
           name:String(x.name||x.title||x.channel||'Kênh'),
           group:String(x.group||x.groupTitle||x.category||'Khác'),
