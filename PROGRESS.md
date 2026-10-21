@@ -1,3 +1,14 @@
+## 2026-10-21 — TV360 proxy-first fix merged; checking real manifests
+
+- PR [#14](https://github.com/cnktvpc/nm7-tv-web/pull/14) merged to `main` as commit [`50e9a642fa7938fbc47d61bcacfbd55430d0d344`](https://github.com/cnktvpc/nm7-tv-web/commit/50e9a642fa7938fbc47d61bcacfbd55430d0d344).
+- Cloudflare deployment ran and the post-deploy production smoke passed: TV360+10, +13 and +15 retain the resolver URL, `forceProxy=true` and User-Agent `Dalvik/2.1.0`.
+- The overall deployment job later failed at an older, unrelated preset-1 assertion: it expected an obsolete GitHub raw URL even though preset 1 currently returned the configured fallback `https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/`. This test failure did not occur at the TV360 smoke step and does not mean the TV360 deployment step failed. No playlist source was changed.
+- Follow-up: allow only the two upstream URLs currently configured for TV preset 1 in the smoke assertion (no runtime/source change), and test actual TV360 manifest responses through `/api/stream`, including a child HLS URI for TV360+10 and DASH/ClearKey metadata for +13/+15.
+- **Trạng thái:** proxy-routing fix is deployed; actual manifest/segment smoke is being verified. Do not mark end-user playback completely confirmed until this production probe passes.
+- **Phạm vi:** NM7 TV Web/Cloudflare only; NM7 TV Android and NM7 Mobile are unchanged.
+
+---
+
 ## 2026-10-21 — Khắc phục hướng phát nhóm Sự kiện TV360 trên Web (nhánh kiểm thử)
 
 - **Triệu chứng theo ảnh người dùng:** TV360+10 kết thúc ở `HLS HTTP 404 · proxy lỗi`; TV360+13 báo `Shaka khởi tạo lỗi`; TV360+15 báo `DASH/DRM lỗi 7001`. Các kênh này phát được trên NM7 TV Android/Mobile.
