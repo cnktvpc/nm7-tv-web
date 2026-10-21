@@ -1,3 +1,15 @@
+## 2026-10-21 — Khắc phục hướng phát nhóm Sự kiện TV360 trên Web (nhánh kiểm thử)
+
+- **Triệu chứng theo ảnh người dùng:** TV360+10 kết thúc ở `HLS HTTP 404 · proxy lỗi`; TV360+13 báo `Shaka khởi tạo lỗi`; TV360+15 báo `DASH/DRM lỗi 7001`. Các kênh này phát được trên NM7 TV Android/Mobile.
+- **Nguyên nhân mã nguồn đã xác nhận:** playlist TV360 dùng URL resolver `https://vmttv.dpdns.org/tv360/?id=tv360-N` và chỉ dẫn User-Agent `Dalvik/2.1.0`. Bộ phân tích M3U của Web không đánh dấu resolver này `forceProxy`, nên Web có thể thử phát trực tiếp trước và không gửi User-Agent của playlist trong chính yêu cầu media trực tiếp.
+- **Thay đổi trên nhánh `fix/tv360-web-proxy-playback-20261021`:** nhận diện riêng host/path của resolver TV360; đánh dấu ứng viên `forceProxy` ở cả Worker M3U parser và parser M3U cục bộ của bốn runtime Web; giữ nguyên User-Agent để Worker dùng khi yêu cầu manifest/media và viết lại các URI HLS/DASH con. Không thay nguồn playlist, khóa DRM, cấu hình nhóm kênh hoặc binding Cloudflare.
+- **Hồi quy:** thêm `scripts/test-tv360-playback-routing.js`; đưa vào preflight Cloudflare. Bump cache key runtime để tránh trình duyệt giữ script cũ. Thêm production smoke kiểm tra TV360+10/+13/+15 trong preset 2 có resolver, `forceProxy=true` và User-Agent `Dalvik/2.1.0`.
+- **Lưu ý chẩn đoán:** mã Shaka 7001 có thể là lỗi thao tác bị hủy trong quá trình teardown/retry; không xem riêng mã này là bằng chứng khóa ClearKey sai. Cần đánh giá theo log lỗi gốc và kết quả phát thực tế.
+- **Trạng thái:** code và test đang được chuẩn bị trên nhánh riêng; chưa tuyên bố production đã sửa cho đến khi regression, production smoke và playback thật được xác nhận.
+- **Phạm vi:** chỉ NM7 TV Web/Cloudflare. Không chỉnh sửa NM7 TV Android hoặc NM7 Mobile.
+
+---
+
 
 ## 2026-10-19 — Tinh chỉnh thêm độ trong suốt thẻ LIVE (PR #13)
 
