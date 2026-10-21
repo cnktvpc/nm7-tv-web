@@ -214,7 +214,7 @@ jobs:
               missing=[w for w in wants if not any(w.casefold() in str(n).casefold() for n in got)]
               if missing:
                   raise SystemExit(f'{g} channels missing {missing}; actual={got[:20]}')
-          require_names('VTV',['VTV1','VTV2','VTV3','VTV4','VTV5','VTV5 Tây Nam Bộ','VTV5 Tây Nguyên','VTV6'])
+          require_names('VTV',['VTV1','VTV2','VTV3','VTV4','VTV5','VTV5 Tây Nam Bộ','VTV5 Tây Nguyên','VTV7','VTV8','VTV9','VTV10'])
           require_names('VTVCab',['VTVCab 8 - ON BiBi','VTVCab 10 - ON Cine','VTVCab 5 - ON E Channel','VTVCab 9 - ON Info TV','VTVCab 21 - On Kids HD','VTVCab 16 - ON Football HD'])
           require_names('Thể Thao',['HTV Thể Thao','SCTV15','SCTV17','SCTV22','VTVCab 3 - ON Sports HD'])
           require_names('SCTV',['SCTV1','SCTV2','SCTV3'])
