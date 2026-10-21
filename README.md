@@ -1,10 +1,13 @@
-# Trạng thái mới nhất — TV360 retry đã merge; VTV smoke đã đồng bộ (21/10/2026)
+# Trạng thái mới nhất — TV360 retry đã triển khai và production smoke PASS (21/10/2026)
 
-- PR [#17](https://github.com/cnktvpc/nm7-tv-web/pull/17) đã merge, thêm retry tối đa 2 lần cho resolver TV360 khi player xác nhận HTTP 404. Bản retry giữ URL nguồn, User-Agent và metadata DRM; chỉ áp dụng NM7 TV Web.
-- Kiểm thử PR trên commit cuối cùng PASS: TV360 routing regression, Web Browser Validation, TV360 Production Manifest Smoke, LIVE metadata regression và Browser remote + HLS E2E.
-- PR [#18](https://github.com/cnktvpc/nm7-tv-web/pull/18) đã merge; assertion VTV trong smoke nay khớp VTV1–VTV5, VTV5 Tây Nam Bộ/Tây Nguyên và VTV7–VTV10. Không thay playlist hay kênh. GitHub chưa hiển thị lượt Cloudflare deploy mới cho commit merge; trạng thái deploy cuối chỉ được xác nhận khi workflow mới chạy và smoke hoàn tất.
-- Sau khi PR này merge, chạy lại deploy workflow và xác nhận production smoke lần cuối. Bằng chứng gần nhất: TV360+10 có lúc 404 lần đầu nhưng HLS 200 ở lần thử tiếp theo; đoạn TS 206; TV360+13/+15 DASH 200.
+- **Cloudflare deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã triển khai NM7 TV Web thành công. Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.
+- **Runtime mới đã được xác minh trên production:** trang chủ tải cache key `20261021-tv360-retry404-2`; script được phục vụ có hàm `retryTv360Resolver`; lỗi HTTP 404 trên resolver TV360 được thử lại tối đa 2 lần trong player.
+- **Production media smoke PASS:** TV360+10 HLS HTTP 200; đoạn TS con HTTP 206; TV360+13 trả 404 ở lần đầu rồi DASH HTTP 200 ở lần hai; TV360+15 DASH HTTP 200. Kết thúc bằng `TV360_PRODUCTION_MEDIA_SMOKE_OK` và `NM7_TV360_RUNTIME_DEPLOY_AND_MEDIA_SMOKE_OK`.
+- Resolver TV360 vẫn chạy proxy-first với User-Agent `Dalvik/2.1.0`. Không thay URL playlist, thứ tự nguồn, khóa DRM hoặc metadata kênh.
+- Các kiểm thử PR đã PASS: TV360 routing regression, Web Browser Validation, LIVE metadata regression và Browser remote + HLS E2E. PR [#17](https://github.com/cnktvpc/nm7-tv-web/pull/17) sửa runtime; PR [#18](https://github.com/cnktvpc/nm7-tv-web/pull/18) sửa assertion VTV smoke theo upstream; PR [#19](https://github.com/cnktvpc/nm7-tv-web/pull/19) thêm guarded deploy workflow.
+- **Giới hạn xác minh:** kiểm thử đã chứng minh manifest HLS/DASH và một segment HLS có thể tải qua Worker, chưa thay thế thử xem có hình/tiếng trên điện thoại của người dùng. Hãy mở lại/refresh cứng trang NM7 TV Web rồi thử TV360+10, +13 và +15.
 - Production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
 
 ---
 
