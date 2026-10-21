@@ -1,0 +1,59 @@
+name: Guarded NM7 TV Web production deploy (TV360)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nm7-tv360-guarded-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Deliberately gated to one explicit same-repository deployment branch.
+    if: github.event.pull_request.head.ref == 'deploy/nm7-tv360-runtime-final-20261021' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pull request merge commit
+        uses: actions/checkout@v4
+
+      - name: Verify syntax and TV360 routing regressions
+        run: |
+          set -euo pipefail
+          node --check web-tv/app.js
+          node --check web-tv/app-safari-policy.js
+          node --check web-tv/app-safari-policy-pc-controls.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --input-type=module --check < worker.js
+          node scripts/test-tv360-playback-routing.js
+          node scripts/test-playback-startup-fallback.js
+          node scripts/test-device-default-preset.js
+          node scripts/test-live-player-hide-metadata.js
+          node scripts/test-menu-fullscreen.js
+          python3 -m py_compile scripts/test-tv360-production-manifest.py
+
+      - name: Deploy NM7 TV Web to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      - name: Verify deployed runtime retry and TV360 manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          KEY="20261021-tv360-retry404-2"
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__tv360_runtime_deploy_smoke=$(date +%s)" -o /tmp/nm7-home.html
+          grep -q "app-safari-policy-mobile-controls.js?v=$KEY" /tmp/nm7-home.html
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=$KEY&retryToast=20261019-cleanup1" -o /tmp/nm7-mobile-runtime.js
+          grep -q "function retryTv360Resolver(c,cand,gen,reason)" /tmp/nm7-mobile-runtime.js
+          grep -q "TV360 tạm lỗi" /tmp/nm7-mobile-runtime.js
+          python3 scripts/test-tv360-production-manifest.py
+          echo "NM7_TV360_RUNTIME_DEPLOY_AND_MEDIA_SMOKE_OK"
