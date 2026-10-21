@@ -46,6 +46,7 @@ jobs:
           node scripts/test-desktop-home-tabs.js
           node scripts/test-live-player-hide-metadata.js
           node scripts/test-playback-startup-fallback.js
+          node scripts/test-tv360-playback-routing.js
           node scripts/test-menu-fullscreen.js
           test -f web-tv/ban-tin.html
           echo "NM7_TV_JS_SYNTAX_SPORT_IPAD_AND_NEWS_REGRESSION_TESTS_OK"
@@ -56,6 +57,33 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
+
+      - name: Smoke test TV360 resolver proxy routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+          curl -fsSL --max-redirs 3 --max-time 45 "$BASE/api/playlist?source=tv&default=2&refresh=1&__tv360_smoke=$(date +%s)" -o /tmp/nm7-tv360-playlist.json
+          python3 - <<'PY'
+          import json
+          from urllib.parse import urlparse
+          data=json.load(open('/tmp/nm7-tv360-playlist.json',encoding='utf-8'))
+          channels=data.get('channels') or []
+          wanted=('TV360+10','TV360+13','TV360+15')
+          for name in wanted:
+              matches=[c for c in channels if str(c.get('name','')).strip().lower()==name.lower()]
+              if not matches:
+                  raise SystemExit('TV360_PRODUCTION_SMOKE_FAIL: missing '+name+' in default TV preset 2')
+              candidates=[]
+              for channel in matches:
+                  candidates.extend(channel.get('candidates') or [])
+              resolver=[c for c in candidates if (urlparse(str(c.get('url',''))).hostname or '').lower()=='vmttv.dpdns.org' and urlparse(str(c.get('url',''))).path.rstrip('/')=='/tv360']
+              if not resolver:
+                  raise SystemExit('TV360_PRODUCTION_SMOKE_FAIL: '+name+' lost its tv360 resolver candidate')
+              if not any(c.get('forceProxy') is True and c.get('ua')=='Dalvik/2.1.0' for c in resolver):
+                  raise SystemExit('TV360_PRODUCTION_SMOKE_FAIL: '+name+' is not proxy-first with playlist User-Agent')
+          print('TV360_RESOLVER_PROXY_PRODUCTION_SMOKE_OK channels='+','.join(wanted))
+          PY
 
       - name: Deploy dedicated YouTube reverse proxy
         if: github.ref != 'refs/heads/fix/vtv1-single-source-hide-default-urls-20261009'
@@ -122,7 +150,7 @@ jobs:
           echo "$BG_META" | grep -q "3840x2160"
           test "$(sha256sum /tmp/nm7-bg.webp | cut -d' ' -f1)" = "d8af6ac8ba532db465dcb8c44e00b71865e6c9a712c8cc21cd0a2118400bd00d"
           grep -q "NM7 TV 1.0.69" /tmp/nm7-home.html
-          grep -q "app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6" /tmp/nm7-home.html
+          grep -q "app-safari-policy-mobile-controls.js?v=20261021-tv360-proxy1" /tmp/nm7-home.html
           grep -q "retryToast=20261019-cleanup1" /tmp/nm7-home.html
           grep -Fq "#player:not(.live-playback) #playerTop{display:none!important;}" /tmp/nm7-home.html
           grep -Fq "body.mobile-mode #mobileMenuBtn{display:flex;align-items:center;justify-content:center;flex:0 0 46px}" /tmp/nm7-home.html
@@ -235,7 +263,7 @@ jobs:
                   raise SystemExit("YouTube UI marker missing: "+needle)
           print("YOUTUBE_UI_SMOKE_OK")
           PY
-          APP="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6&retryToast=20261019-cleanup1")"
+          APP="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261021-tv360-proxy1&retryToast=20261019-cleanup1")"
           python3 - "$APP" <<'PY'
           import sys
           app=sys.argv[1]
@@ -402,13 +430,13 @@ jobs:
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
           curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__mobile_player_smoke=$(date +%s)" -o /tmp/nm7-mobile-player.html
-          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6&retryToast=20261019-cleanup1&smoke=$(date +%s)" -o /tmp/nm7-mobile-player.js
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261021-tv360-proxy1&retryToast=20261019-cleanup1&smoke=$(date +%s)" -o /tmp/nm7-mobile-player.js
           python3 - <<'PY'
           from pathlib import Path
           html=Path('/tmp/nm7-mobile-player.html').read_text(encoding='utf-8')
           js=Path('/tmp/nm7-mobile-player.js').read_text(encoding='utf-8')
           checks={
-              'mobile runtime asset active':'app-safari-policy-mobile-controls.js?v=20261018-live-hide-overlay6&retryToast=20261019-cleanup1' in html,
+              'mobile runtime asset active':'app-safari-policy-mobile-controls.js?v=20261021-tv360-proxy1&retryToast=20261019-cleanup1' in html,
               'mobile fullscreen idle CSS':'#player.player-fullscreen-idle #playerFullscreenBtn{opacity:0;visibility:hidden;pointer-events:none}' in html,
               'mobile mode has dedicated timer':'function isMobileFullscreenAutoHideMode(){return !!S.mobileMode&&!isNativeTvMode()}' in js and 'var PLAYER_UI_HIDE_DELAY=2400;' in js,
               'only fullscreen shortcut hides on mobile':"current.classList.add('player-fullscreen-idle')" in js,

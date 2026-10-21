@@ -1,3 +1,13 @@
+# Cập nhật mới nhất — xử lý lỗi phát Sự kiện TV360 trên NM7 TV Web (21/10/2026)
+
+- **Lỗi theo ảnh kiểm thử:** TV360+10 báo HLS HTTP 404 khi chuyển proxy; TV360+13 báo lỗi khởi tạo Shaka; TV360+15 báo DASH/DRM lỗi 7001.
+- **Phân tích:** nguồn dùng URL resolver `vmttv.dpdns.org/tv360/` và khai báo User-Agent `Dalvik/2.1.0`. Trước sửa, Web không đánh dấu resolver này để phát qua proxy ngay từ lần đầu, nên luồng có thể bắt đầu bằng một request trực tiếp không mang User-Agent nguồn. 7001 tự nó không đủ kết luận ClearKey không hợp lệ; cần xét log và chuỗi retry.
+- **Bản sửa ứng viên:** phát hiện host/path TV360 trong parser M3U của Worker và các runtime Web, đặt `forceProxy=true`, giữ lại UA của playlist và để Worker proxy/rewrite manifest cùng segment HLS/DASH. Không sửa URL nguồn, khóa DRM hay nhóm playlist.
+- **Kiểm thử:** `scripts/test-tv360-playback-routing.js` kiểm tra proxy-first, truyền User-Agent và cache key; workflow Cloudflare có production smoke cho TV360+10/+13/+15. Trạng thái phát hành cần dựa trên kết quả CI/production thật.
+- **Phạm vi:** chỉ NM7 TV Web trên Cloudflare Workers; NM7 TV Android và NM7 Mobile không bị sửa.
+
+---
+
 # Cập nhật mới nhất — làm sáng nền thẻ sự kiện LIVE trên mobile (19/10/2026)
 
 - **Yêu cầu:** thẻ sự kiện LIVE trên nền phong cảnh đang quá tối; cần cho ảnh nền xuyên qua nhiều hơn nhưng vẫn giữ chữ trắng dễ đọc.

@@ -1,0 +1,35 @@
+name: TV360 Web Playback Routing Regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'worker.js'
+      - 'web-tv/**'
+      - 'scripts/test-tv360-playback-routing.js'
+      - '.github/workflows/test-tv360-playback-routing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tv360-routing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check player JavaScript syntax
+        run: |
+          node --check web-tv/app.js
+          node --check web-tv/app-safari-policy.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --check web-tv/app-safari-policy-pc-controls.js
+      - name: TV360 routing regression
+        run: node scripts/test-tv360-playback-routing.js
+      - name: Existing playback startup regression
+        run: node scripts/test-playback-startup-fallback.js
