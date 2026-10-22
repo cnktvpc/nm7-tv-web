@@ -1,7 +1,7 @@
 # Lịch phát sóng XMLTV cho NM7 TV Web — đã merge và triển khai (22/10/2026)
 
 - **Đã merge PR [#22](https://github.com/cnktvpc/nm7-tv-web/pull/22)** vào main; merge commit: `38213b46ef1caa60bac3ac8c4c5dcabe2f788820`.
-- **Cloudflare rollout xác nhận 100% traffic:** Worker deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320`, version `487` / `41163598-cd20-4ea4-aea9-9159d4cd0e32`, tạo lúc 2026-10-22 00:06:25 UTC.
+- **Cloudflare rollout xác nhận 100% traffic:** sau merge đã có deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320` (version 487); lần kiểm tra sau đó ghi nhận deployment `04da6157-9c87-4542-a6e7-4d2a03aa5d8b`, version `488` / `11808ac1-95bb-4ad5-a96b-9aa34386f78a`, tạo lúc 2026-10-22 00:08:33 UTC (100% traffic).
 - Trang lịch: https://nm7-tv-web.phuongnm7-iptv.workers.dev/tv-guide.html
 - Đã nghiên cứu cấu trúc APK Watch 1.0.1 (Kotlin/Jetpack Compose, các lớp EPG riêng) và áp dụng các ý tưởng, không sao chép mã nguồn: parser XMLTV, ghép kênh theo TVG-ID rồi TVG-name/tên đã chuẩn hóa, chương trình hiện tại/kế tiếp, thanh tiến độ và thời gian còn lại, lịch theo ngày, cache và mở lại kênh trong player.
 - Bản Web bổ sung `/tv-guide.html`, `/api/epg` cho XMLTV/XMLTV.GZ, đọc metadata `url-tvg`/`x-tvg-url`/ `tvg-name` từ playlist, lọc nhóm/tìm kiếm và chuyển từ lịch về đúng kênh. **Chỉ NM7 TV Web/Worker đã được thay đổi; NM7 TV Android và NM7 Mobile không bị sửa.**
