@@ -142,6 +142,8 @@ jobs:
                 'drmTypes=' + (','.join(sorted(drm_types)) or 'none'),
                 'playlistKidCount=' + str(len(key_kids)),
                 'mpdKidCount=' + str(len(mpd_kids)),
+                'playlistKids=' + (','.join(sorted(key_kids)) or 'none'),
+                'mpdKids=' + (','.join(sorted(mpd_kids)) or 'none'),
                 'kidMatch=' + str(bool(key_kids & mpd_kids)).lower())
           PY
           done
