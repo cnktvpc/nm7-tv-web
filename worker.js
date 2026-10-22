@@ -152,14 +152,16 @@ function rewriteDash(text,finalUrl,q,origin){
     if(!sourceBase.endsWith('/'))sourceBase+='/';
   }
   const proxyBase=dashProxyBase(sourceBase,q,origin);
-  // Absolute or root-relative SegmentTemplate/SegmentURL resources need their own
-  // upstream base context; relative resources inherit the proxied BaseURL above.
+  // Resolve every DASH resource URI against the ORIGINAL upstream BaseURL, then
+  // proxy it with a context token for that resource's actual directory. Relative
+  // paths such as ../_shared/... must not inherit /api/dash-resource/<token>/:
+  // browser URL normalization removes <token> while resolving "..", and the
+  // Worker then rejects the request as "bad dash context".
   text=text.replace(/\b(media|initialization|sourceURL|href)\s*=\s*"([^"]+)"/gi,function(m,attr,value){
     const v=String(value||'').trim();
-    if(/^https?:\/\//i.test(v)||v.startsWith('/')){
-      return attr+'="'+proxyAbsoluteDashUri(v,sourceBase,q,origin)+'"';
-    }
-    return m;
+    if(!v||/^(?:data:|blob:|#)/i.test(v))return m;
+    if(/^[a-z][a-z0-9+.-]*:/i.test(v)&&!/^https?:\/\//i.test(v))return m;
+    return attr+'="'+proxyAbsoluteDashUri(v,sourceBase,q,origin)+'"';
   });
   if(/<BaseURL\b[^>]*\/\s*>/i.test(text)){
     return text.replace(/<BaseURL\b[^>]*\/\s*>/i,'<BaseURL>'+proxyBase+'</BaseURL>');
