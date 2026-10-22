@@ -908,7 +908,7 @@ function tv360TransientHttpStatusFromShaka(e){
   if(value==null)continue;
   if(typeof value==='number'){if(retryableStatus(value))return value;continue}
   if(typeof value==='string'){
-   var match=/(?:http|status|response)[^0-9]{0,24}(404|408|429|5\\d{2})/i.exec(value);
+   var match=/(?:http|status|response)[^0-9]{0,24}(404|408|429|5\d{2})/i.exec(value);
    if(match)return Number(match[1]);
    continue;
   }
