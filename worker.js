@@ -763,7 +763,7 @@ async function probeResponse(request,q){
     }
   }
   const status=attemptedGet?(getStatus||0):(r?.status||0);
-  const probeSucceeded=attemptedGet?(getStatus>0&&getStatus<400):!!r?.ok;
+  const probeSucceeded=attemptedGet?(getStatus>=200&&getStatus<300):!!r?.ok;
   const bodyLower=String(bodyText||"").toLowerCase();
   // Return safe response fingerprints only; never echo upstream body, URLs or credentials.
   const bodyTrim=String(bodyText||"").trimStart();
