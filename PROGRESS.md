@@ -1,3 +1,11 @@
+## 2026-10-22 — Follow-up kiểm tra TV360+15 sau yêu cầu tiếp tục
+
+- Kiểm tra trực tiếp qua trình duyệt Cloudflare Browser Rendering: `/api/playlist?source=tv&default=1` trả HTTP 200, có 319 kênh; TV360+15 có đúng 1 candidate resolver `vmttv.dpdns.org/tv360/?id=tv360-15`, có metadata ClearKey.
+- Manifest production lấy qua Worker trả MPD HTTP 200 (13,143 bytes) ở các lần thành công; các lần gọi khác vẫn trả HTTP 404. Trong 3 lần MPD thành công liên tiếp, `default_KID` đều là `fa403384-1a70-511c-84a7-fe7e0daf1a6a`.
+- Đã đối chiếu ID khóa của candidate TV360+15 với KID của MPD: **không khớp**. Kiểm tra thêm ba nguồn playlist đang cấu hình (`vuminhthanh12/vmttv`, `phuongnm7-playlist`, `iptv-live-merge`) cũng không tìm thấy metadata TV360 có KID trùng với manifest hiện tại. Không ghi hoặc xuất giá trị KEY ra log.
+- Đây là lỗi metadata DRM/ánh xạ nguồn cần giải quyết; việc đổi proxy hoặc retry không thể tự tạo ra khóa đúng. Không thay đổi key/playlist hoặc sửa NM7 TV Android/Mobile. Chưa xác nhận playback Web hoàn chỉnh.
+- GitHub Actions đã được yêu cầu rerun nhưng 3 workflow liên quan tiếp tục báo failure; API jobs không trả steps/log, nên chưa có bằng chứng lỗi test cụ thể. Không deploy thêm và không merge PR #24 khi kiểm thử chưa đạt.
+
 ## 2026-10-22 — TV360+15: DASH segment proxy đã sửa; DRM KID mismatch còn chặn playback
 
 - Production Worker **version 508** đã được cập nhật trực tiếp trên Cloudflare. Deployment ID: `eb7ccc0f-3830-4108-8665-8cef9982733f`. Đã xác minh các binding hiện hữu vẫn còn: `ASSETS`, `PLAYLIST_SOURCE → phuongnm7-playlist`, `THETHAO_SOURCE → thethaonm7`.
