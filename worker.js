@@ -227,8 +227,11 @@ function clearKeyKidIds(value){
   if(text.startsWith('{')){
     try{
       const data=JSON.parse(text);
-      if(Array.isArray(data.keys))for(const item of data.keys)if(item)add(item.kid||item.keyId);
-      else if(data.keys&&typeof data.keys==='object')for(const kid of Object.keys(data.keys))add(kid);
+      if(Array.isArray(data.keys)){
+        for(const item of data.keys)if(item)add(item.kid||item.keyId);
+      }else if(data.keys&&typeof data.keys==='object'){
+        for(const kid of Object.keys(data.keys))add(kid);
+      }
       if(data.kid)add(data.kid);
     }catch{}
   }else{
