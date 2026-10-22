@@ -589,3 +589,11 @@ URL preview: https://nm7-tv-web-news-preview.phuongnm7-iptv.workers.dev/ban-tin.
 - Production Worker `nm7-tv-web` deployment `b42df3e0-0d2f-4fb1-9ef4-8f99a6252ae1`, version `93b106c6-9dbc-4e34-94f7-888b5984fec7`, serving 100% traffic. Verified preserved bindings: `ASSETS`, `PLAYLIST_SOURCE` -> `phuongnm7-playlist`, `THETHAO_SOURCE` -> `thethaonm7`.
 - Existing `/api/live-feed` and `/api/playlist` routes remain in the deployed bundle. Regression workflow PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084780733. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084788415.
 - This direct-hide patch is intended to fix the production-only behavior where the test Worker already worked. It has been deployed; final device/browser verification remains recommended after one hard refresh.
+
+
+## 2026-10-22 — TV360 ClearKey metadata refresh candidate (not deployed)
+
+- Added a guarded overlay for the default TV playlist: fetches the current event M3U feed, validates ClearKey KID/KEY pairs as 128-bit values, matches by TV360 channel number, and updates only the existing `vmttv.dpdns.org/tv360` resolver candidates.
+- Preserves resolver URLs, proxy-first flags, User-Agent, and all non-TV360 channels. If the feed is unavailable or no valid matching event metadata exists, the playlist remains unchanged.
+- Added `scripts/test-tv360-live-key-overlay.js` and wired it into the TV360 regression workflow.
+- **Release status:** source change is on branch `fix/tv360-probe-http-recovery-20261022` and PR #24; it has not been deployed to the production Worker. This is not a playback PASS. Must validate parser/feed matching, regression CI, production playlist metadata, MPD KID match, and actual video/audio playback before release.
