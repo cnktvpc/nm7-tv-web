@@ -6,7 +6,7 @@
 - Đã thêm web-tv/epg-core.js, web-tv/tv-guide.html, web-tv/tv-guide.js và Worker route /api/epg. Parser hỗ trợ dấu giờ XMLTV có múi giờ; API hỗ trợ XML/XML.GZ, kiểm tra URL/redirect, giới hạn dữ liệu và cache. Bộ phân tích playlist giữ metadata url-tvg/x-tvg-url và tvg-name.
 - Nối vào menu của 4 runtime Web. Từ lịch có thể mở đúng kênh theo ID/tên khi quay lại NM7; yêu cầu chuyển kênh tồn tại tối đa 120 giây trong localStorage. Không thay đổi repo NM7 TV Android hoặc NM7 Mobile.
 - Đã bổ sung scripts/test-epg-core.js, scripts/test-epg-guide.js và kiểm tra bước deploy/smoke vào .github/workflows/cloudflare-deploy.yml.
-- Cần kiểm chứng trước khi phát hành: chạy tất cả node --check và regression scripts trên runner, xác nhận endpoint XMLTV + redirect/private-URL rejection, xác nhận dữ liệu lịch thực khớp kênh. Nếu playlist hiện hành không khai báo nguồn XMLTV, cần nhập URL XMLTV công khai từ nhà cung cấp; không tuyên bố có lịch cho toàn bộ kênh đến khi match được thực tế.
+- Cần kiểm chứng trước khi phát hành: chạy tất cả node --check và regression scripts trên runner, xác nhận endpoint XMLTV + redirect/private-URL rejection, xác nhận dữ liệu lịch thực khớp kênh. Nếu playlist không khai báo nguồn XMLTV, trang lịch gợi ý feed FreeEPG Việt Nam (225 kênh được liệt kê, trạng thái cập nhật theo ngày); CI kiểm tra feed gzip, kích thước XML và số chương trình trước khi phát hành. Vẫn cần xác minh tỷ lệ ghép thật với playlist NM7.
 - Production đang tiếp tục chạy bản TV360 đã xác minh tại mốc trước; thay đổi EPG trên nhánh này chưa được triển khai.
 
 ---
