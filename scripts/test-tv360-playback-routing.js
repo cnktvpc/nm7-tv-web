@@ -19,6 +19,9 @@ assert.match(worker, /forceProxy:\/vietanhtv.*isTv360ResolverUrl\(ps\[0\]\)/,
 assert.match(worker, /h\.set\('User-Agent',q\.get\('ua'\)\|\|fallbackUA\)/,
   'Worker stream proxy must preserve an explicit playlist User-Agent');
 
+assert.ok(worker.includes('newCacheSchema') && worker.includes('safeGetter') && worker.includes('safeProxyFirst'),
+  'Worker runtime patch must invalidate stale cache and guard/route TV360 candidates');
+
 for (const file of runtimeFiles) {
   const source = fs.readFileSync(file, 'utf8');
   assert.match(source, /function isTv360ResolverUrl\(value\)/,
@@ -27,6 +30,10 @@ for (const file of runtimeFiles) {
     file + ': candidate must preserve proxy-first metadata');
   assert.match(source, /if\(cand\.forceProxy===true\)return true/,
     file + ': resolver candidates must use the proxy on the first playback attempt');
+  assert.match(source, /if\(isTv360ResolverUrl\(cand\.url\|\|''\)\)return true/,
+    file + ': TV360 resolver candidates must always be proxy-first even if forceProxy was lost');
+  assert.ok(source.includes("CACHE_SCHEMA='20261022-tv360-probe-recovery1'"),
+    file + ': stale legacy channel cache must be invalidated');
   assert.match(source, /if\(cand\.ua\)q\+='&ua='\+encodeURIComponent\(cand\.ua\)/,
     file + ': per-channel User-Agent must reach the Worker proxy');
 }
