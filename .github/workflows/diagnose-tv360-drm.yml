@@ -2,7 +2,7 @@ name: Diagnose TV360 ClearKey DASH endpoints
 
 on:
   push:
-    branches: ["feat/tvdrm-player-integration-20261004"]
+    branches: ["main", "feat/tvdrm-player-integration-20261004"]
   workflow_dispatch:
 
 jobs:
