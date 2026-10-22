@@ -1,3 +1,17 @@
+## 2026-10-22 — TV360 resolver probe recovery (đang kiểm thử nhánh riêng)
+
+- **Tái hiện lỗi production:** probe qua Worker trả HTTP 404 với một số resolver TV360, HTTP 503 ở một resolver khác, trong khi một resolver khác trả nội dung DASH. Một số phản hồi có URL cuối trông như `.mpd` dù response thất bại; vì vậy chỉ kiểm tra kiểu URL là không đủ để xác nhận manifest.
+- **Nguyên nhân mã nguồn:** Worker `/api/probe` từng trả `type` suy ra từ URL cuối mà không buộc phản hồi HTTP phải thành công. Runtime `probeCandidate()` tin `type` trước khi kiểm tra status, khiến Shaka có thể được khởi tạo với resolver đang lỗi. Ngoài ra, lỗi gọi probe bị chuyển thành thông báo chung `Probe lỗi`.
+- **Bản sửa trong nhánh `fix/tv360-probe-http-recovery-20261022`:** `/api/probe` dùng status của GET Range khi đã thực hiện và trả `type: http` nếu phản hồi upstream thất bại. Bốn runtime Web kiểm tra status trước khi tin `type`; các lỗi TV360 tạm thời 0/404/408/429/5xx hoặc lỗi gọi probe sẽ dùng retry có giới hạn hai lần. Hết retry thì chuyển nguồn với lý do cụ thể, không coi response hỏng là DASH.
+- **Chẩn đoán Shaka:** bắt giữ thông báo exception thực tế khi khởi tạo; với Shaka 4012 chỉ ghi số lượng `missingKeys`/`restrictedKeyStatuses` vào debug, không ghi nội dung khóa ClearKey. Theo tài liệu Shaka, mã 4012 là `RESTRICTIONS_CANNOT_BE_MET`, có thể liên quan key ID không khớp/thiếu key hoặc giới hạn của key system — không đơn thuần là lỗi mạng.
+- **Cache và regression:** đồng bộ cache key HTML/Worker thành `20261022-tv360-probe-recovery1`; bổ sung assertion vào `scripts/test-tv360-playback-routing.js` cho status-before-type, HTTP failure mapping và retry.
+- **Phạm vi:** chỉ NM7 TV Web/Cloudflare; không sửa NM7 TV Android hoặc NM7 Mobile, không đổi URL nguồn, thứ tự nhóm/kênh hoặc dữ liệu khóa đã có.
+- **Trạng thái:** thay đổi đã được ghi vào nhánh riêng. Chưa đánh dấu PASS cho regression, deploy hoặc phát hình/tiếng thiết bị thật cho đến khi các kiểm tra tiếp theo xác nhận. Nguồn upstream TV360 vẫn có thể trả 404/503; mã sửa chỉ retry giới hạn và báo lỗi thật nếu nguồn tiếp tục hỏng.
+
+Production: https://phuongnm7.app/
+
+---
+
 ## Cập nhật xác minh cuối — 22/10/2026
 
 - Mã sửa URL runtime và phạm vi bản vá logo đã được commit trên nhánh `main`: [`a93a93c`](https://github.com/cnktvpc/nm7-tv-web/commit/a93a93ca6d9d8efb9967cdf5620da22898f23e5a).
