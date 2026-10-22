@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          CACHE="20261022-logo-scroll-load1&retryToast=20261019-cleanup1"
+          CACHE="20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1"
           curl -fsSL --max-time 30 "$BASE/?__nm7_live_overlay_smoke=$GITHUB_SHA" -o /tmp/nm7-production.html
           python3 - <<'PY'
           from pathlib import Path
@@ -55,7 +55,7 @@ jobs:
               '#player.live-playback #playerTitle{display:none!important;}',
               '#player:not(.live-playback) #playerTop{display:none!important;}',
               'retryToast=20261019-cleanup1',
-              'app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load1&retryToast=20261019-cleanup1',
+              'app-safari-policy-mobile-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1',
           ]
           missing = [marker for marker in required if marker not in html]
           if missing:
