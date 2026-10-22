@@ -207,28 +207,61 @@ jobs:
             code="$(curl --retry 1 --retry-all-errors --retry-delay 1 -sS -L --max-time 30 -A 'Dalvik/2.1.0' -o "/tmp/tv360-feed-$i.m3u" -w '%{http_code}' "$url" || true)"
             echo "FEED_CHECK name=$label http=$code bytes=$(wc -c < "/tmp/tv360-feed-$i.m3u" 2>/dev/null || echo 0)"
             python3 - "$label" "/tmp/tv360-feed-$i.m3u" <<'PY'
-          import re,sys
+          import base64,json,re,sys
           from urllib.parse import urlsplit
           label,path=sys.argv[1:]
           try: lines=open(path,encoding='utf-8',errors='replace').read().splitlines()
           except OSError: raise SystemExit(0)
           wanted={'41ce0eac12eb58f69607df0d2eaff649','fa4033841a70511c84a7fe7e0daf1a6a','856f291af35a5db7b7d0c944b32993b9','c305b22dfd6d55e3998ab279cc98e0d3'}
-          entry=None;hits=0
+          def norm(value):
+              value=str(value or '').strip().strip(chr(34)).strip(chr(39))
+              raw=value.replace('-','')
+              if re.fullmatch(r'[0-9a-fA-F]{32}',raw):return raw.lower()
+              try:
+                  raw64=value.replace('-','+').replace('_','/')
+                  raw64+='='*((-len(raw64))%4)
+                  data=base64.b64decode(raw64)
+                  if len(data)==16:return data.hex()
+              except Exception:pass
+              return ''
+          def extract_kids(value):
+              text=str(value or '').strip();kids=[]
+              if text.startswith('{'):
+                  try:
+                      data=json.loads(text)
+                      if isinstance(data.get('keys'),list):
+                          for item in data['keys']:
+                              if isinstance(item,dict):
+                                  kid=norm(item.get('kid') or item.get('keyId'))
+                                  if kid:kids.append(kid)
+                      elif isinstance(data.get('keys'),dict):
+                          for kid in data['keys']:
+                              kid=norm(kid)
+                              if kid:kids.append(kid)
+                      if data.get('kid'):
+                          kid=norm(data.get('kid'))
+                          if kid:kids.append(kid)
+                  except Exception:pass
+              else:
+                  for part in re.split(r'[;,\\\\s]+',text):
+                      if part.count(':')==1:
+                          kid=norm(part.split(':',1)[0])
+                          if kid:kids.append(kid)
+              return sorted(set(kids))
+          entry=None
           def emit(e):
-              global hits
               if not e:return
-              name=e.get('name','');group=e.get('group','');kid=e.get('kid','').replace('-','').lower()
-              is_tv360='tv360' in group.lower() or re.search(r'tv360\s*\+\s*\d{1,2}',name,re.I) or re.search(r'tv360plus\s*\d{1,2}',name,re.I)
-              if not (is_tv360 or kid in wanted):return
+              name=e.get('name','');group=e.get('group','');kids=e.get('kids',[])
+              is_tv360='tv360' in group.lower() or re.search(r'tv360\\s*\\+\\s*\\d{1,2}',name,re.I) or re.search(r'tv360plus\\s*\\d{1,2}',name,re.I)
+              if not (is_tv360 or any(k in wanted for k in kids)):return
               host=pathpart=''
               try:
                   u=urlsplit(e.get('url',''));host=u.hostname or '';pathpart=u.path or ''
               except Exception:pass
-              safe_name=re.sub(r'\s+',' ',name)[:120]
-              print('SOURCE_ENTRY feed='+label,'group='+re.sub(r'\s+',' ',group)[:50],
-                    'name='+safe_name,'kid='+(kid or 'none'),
+              safe_name=re.sub(r'\\s+',' ',name)[:120]
+              print('SOURCE_ENTRY feed='+label,'group='+re.sub(r'\\s+',' ',group)[:50],
+                    'name='+safe_name,'kids='+(','.join(kids) or 'none'),
                     'host='+(host or 'none'),'path='+(pathpart or 'none'))
-              hits+=1
           for line in lines:
               line=line.strip()
               if line.startswith('#EXTINF:'):
@@ -237,10 +270,10 @@ jobs:
                   name=line.split(',',1)[1].strip() if ',' in line else ''
                   entry={'name':name,'group':(re.search(r'group-title="([^"]*)"',header,re.I) or [None,''])[1],
                          'tvgid':(re.search(r'tvg-id="([^"]*)"',header,re.I) or [None,''])[1],
-                         'url':'','kid':'','manifest':''}
+                         'url':'','kids':[],'manifest':''}
               elif entry and line.startswith('#KODIPROP:'):
                   m=re.search(r'license_key=(.+)',line,re.I)
-                  if m:entry['kid']=m.group(1).strip().split(':',1)[0]
+                  if m:entry['kids']=extract_kids(m.group(1).strip())
                   m=re.search(r'manifest_type=(.+)',line,re.I)
                   if m:entry['manifest']=m.group(1).strip()
               elif entry and line and not line.startswith('#') and line.startswith(('http://','https://')):
