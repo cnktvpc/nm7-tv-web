@@ -217,7 +217,7 @@ jobs:
                   raise SystemExit(f'{g} channels missing {missing}; actual={got[:20]}')
           require_names('VTV',['VTV1','VTV2','VTV3','VTV4','VTV5','VTV5 Tây Nam Bộ','VTV5 Tây Nguyên','VTV7','VTV8','VTV9','VTV10'])
           require_names('VTVCab',['On BiBi','ON Cine','ON E- Channel','ON Info TV','On Kids','VTVCab 16 - ON Football HD'])
-          require_names('Thể Thao',['HTV Thể Thao','SCTV15','SCTV17','SCTV22','VTVCab 3 - ON Sports HD'])
+          require_names('Thể Thao',['HTV Thể Thao','On Sports 50fps','SCTV15 HD','SCTV17 HD','SCTV22'])
           require_names('SCTV',['SCTV1','SCTV2','SCTV3'])
           if not any('sctv phim tổng hợp' in str(c.get('name','')).casefold() for c in channels):
               raise SystemExit('SCTV Phim Tổng Hợp channel missing from the current default playlist')
