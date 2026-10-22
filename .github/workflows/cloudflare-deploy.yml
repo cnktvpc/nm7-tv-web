@@ -370,7 +370,7 @@ jobs:
           
           TARGET_URL='https://thethaonm7.phuongnm7-iptv.workers.dev/playlist.m3u'
           ENCODED_TARGET="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TARGET_URL")"
-          curl -sS --max-redirs 3 --max-time 45 "$BASE/api/source?u=$ENCODED_TARGET" -o /tmp/nm7-target-source.json
+          curl --retry 3 --retry-all-errors --retry-delay 2 -sS --max-redirs 3 --max-time 45 "$BASE/api/source?u=$ENCODED_TARGET" -o /tmp/nm7-target-source.json
           python3 - <<'PY'
           import json
           from pathlib import Path
