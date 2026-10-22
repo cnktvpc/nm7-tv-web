@@ -78,7 +78,7 @@ jobs:
           import base64, json, re, sys, xml.etree.ElementTree as ET
           channel, playlist_path, mpd_path = sys.argv[1:]
           def norm(value):
-              value = str(value or '').strip().strip('"\\'')
+              value = str(value or '').strip().strip(chr(34)).strip(chr(39))
               value = value.replace('-', '')
               if re.fullmatch(r'[0-9a-fA-F]{32}', value):
                   return value.lower()
