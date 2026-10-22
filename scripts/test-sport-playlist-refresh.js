@@ -27,7 +27,7 @@ for (const file of appFiles) {
 }
 
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2'),
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load1'),
   'index.html must bump the active player cache-buster');
 
 console.log('SPORT_PLAYLIST_REFRESH_TESTS_OK');
