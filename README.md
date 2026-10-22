@@ -1,3 +1,14 @@
+# Tính năng đang phát triển — Lịch phát sóng XMLTV (22/10/2026)
+
+- Nhánh riêng: feature/epg-tv-guide-20261022. Chưa merge vào main và chưa triển khai lên Cloudflare production.
+- Đã kiểm tra APK watch.apk (Watch 1.0.1, Android/Kotlin/Jetpack Compose). Những cơ chế có thể áp dụng hữu ích cho NM7 là parser XMLTV, ghép lịch bằng TVG-ID trước rồi đến TVG-name/tên kênh, phân chia PAST/LIVE/NEXT, phần trăm tiến độ/thời gian còn lại, lịch theo ngày, làm mới có cache và lưu cache bền vững.
+- Bản Web thử nghiệm tạo trang /tv-guide.html, thêm /api/epg đọc XMLTV/XMLTV.GZ, nhận url-tvg/x-tvg-url từ playlist và thêm mục “Lịch phát sóng · EPG” vào menu NM7. Có lọc theo nhóm/từ khóa, xem chi tiết chương trình, ngày trước/sau và nút “Xem kênh” quay lại player NM7.
+- An toàn và độ bền: chỉ HTTP/HTTPS công khai, xác thực từng redirect, giới hạn thời gian/kích thước tải, kiểm tra XMLTV, nén gzip và cache Worker/trình duyệt. Các runtime PC/mobile và logic LIVE/TV360 được giữ nguyên về chức năng; chỉ nối menu/hand-off EPG và đổi cache key.
+- Giới hạn dữ liệu quan trọng: lịch chỉ xuất hiện khi playlist khai báo URL XMLTV hợp lệ hoặc người dùng nhập URL XMLTV công khai. Nếu playlist không cung cấp EPG, NM7 gợi ý feed XMLTV Việt Nam của FreeEPG (225 kênh được công bố và cập nhật theo ngày); người dùng vẫn có thể thay URL. Nguồn bên ngoài có thể không có lịch cho tất cả kênh và được kiểm tra riêng trong CI.
+- Trạng thái hiện tại: code, regression test và production-smoke step đã được thêm trên nhánh tính năng; cần chạy kiểm thử/CI trên nhánh và xem kết quả trước khi merge. Không khẳng định production đã có EPG cho đến khi deploy và smoke xác minh thành công. Kiểm tra HTTP tự động cũng không thay thế thao tác xem thực tế trên trình duyệt TV/iPad.
+
+---
+
 # Trạng thái mới nhất — TV360 retry đã triển khai và production smoke PASS (21/10/2026)
 
 - **Cloudflare deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã triển khai NM7 TV Web thành công. Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.

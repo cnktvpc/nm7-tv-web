@@ -1,3 +1,16 @@
+## 2026-10-22 — Nghiên cứu APK Watch và tích hợp lịch EPG trên nhánh thử nghiệm
+
+- Nguồn tham khảo: /mnt/data/watch.apk — gói Android com.tieume.launchpadtv.watch, phiên bản 1.0.1 (versionCode 29), triển khai bằng Kotlin/Jetpack Compose; thấy các lớp EpgRepository, XmltvParser, EpgStore và EpgSchedule. Đây là phân tích cấu trúc/DEX và chuỗi, không phải mã nguồn gốc giải ngược hoàn chỉnh.
+- Các điểm đáng học hỏi: lịch XMLTV có channel/programme; ghép TVG-ID rồi fallback TVG-name/tên đã chuẩn hóa; các trạng thái chương trình đã qua/đang phát/sắp phát; tiến độ, thời gian còn lại; lịch trong ngày và cache gzip/persist; kiểm tra tệp XMLTV hoàn chỉnh, báo lỗi khi không khớp kênh.
+- Nhánh mới: feature/epg-tv-guide-20261022 từ main. Chưa merge/deploy production.
+- Đã thêm web-tv/epg-core.js, web-tv/tv-guide.html, web-tv/tv-guide.js và Worker route /api/epg. Parser hỗ trợ dấu giờ XMLTV có múi giờ; API hỗ trợ XML/XML.GZ, kiểm tra URL/redirect, giới hạn dữ liệu và cache. Bộ phân tích playlist giữ metadata url-tvg/x-tvg-url và tvg-name.
+- Nối vào menu của 4 runtime Web. Từ lịch có thể mở đúng kênh theo ID/tên khi quay lại NM7; yêu cầu chuyển kênh tồn tại tối đa 120 giây trong localStorage. Không thay đổi repo NM7 TV Android hoặc NM7 Mobile.
+- Đã bổ sung scripts/test-epg-core.js, scripts/test-epg-guide.js và kiểm tra bước deploy/smoke vào .github/workflows/cloudflare-deploy.yml.
+- Cần kiểm chứng trước khi phát hành: chạy tất cả node --check và regression scripts trên runner, xác nhận endpoint XMLTV + redirect/private-URL rejection, xác nhận dữ liệu lịch thực khớp kênh. Nếu playlist không khai báo nguồn XMLTV, trang lịch gợi ý feed FreeEPG Việt Nam (225 kênh được liệt kê, trạng thái cập nhật theo ngày); CI kiểm tra feed gzip, kích thước XML và số chương trình trước khi phát hành. Vẫn cần xác minh tỷ lệ ghép thật với playlist NM7.
+- Production đang tiếp tục chạy bản TV360 đã xác minh tại mốc trước; thay đổi EPG trên nhánh này chưa được triển khai.
+
+---
+
 ## 2026-10-21 — Hoàn tất deploy runtime retry TV360 và xác minh production
 
 - **Deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã chạy Wrangler thành công. Cloudflare Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.
