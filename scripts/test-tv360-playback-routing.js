@@ -39,12 +39,24 @@ for (const file of runtimeFiles) {
     file + ': HLS transient HTTP failures must retry the resolver before advancing candidates');
   assert.match(source, /function tv360TransientHttpStatusFromShaka\(e\)/,
     file + ': Shaka must classify transient resolver HTTP failures');
+  assert.ok(source.includes('5\\d{2}') && !source.includes('5\\\\d{2}'),
+    file + ': HTTP 5xx classifier must use a digit-class regex, not a literal backslash');
   assert.match(source, /var tv360Status=tv360TransientHttpStatusFromShaka\(e\)/,
     file + ': fatal Shaka errors must invoke bounded transient HTTP recovery');
   assert.match(source, /var tv360LoadStatus=tv360TransientHttpStatusFromShaka\(e\)/,
     file + ': Shaka manifest-load failures must invoke bounded transient HTTP recovery');
   assert.match(source, /S\.tv360404RetryCount>=2/,
     file + ': retries must be bounded at two per resolver URL');
+
+  const classifierStart = source.indexOf('function tv360TransientHttpStatusFromShaka(e){');
+  const classifierEnd = source.indexOf('function retryTv360Resolver(', classifierStart);
+  assert.ok(classifierStart >= 0 && classifierEnd > classifierStart,
+    file + ': transient HTTP classifier body must be present');
+  const classifyTv360Status = vm.runInNewContext('(' + source.slice(classifierStart, classifierEnd).trim() + ')');
+  assert.equal(classifyTv360Status({data:['HTTP status 503']}), 503,
+    file + ': textual HTTP 5xx errors must be classified for bounded retry');
+  assert.equal(classifyTv360Status({data:[{status:429}]}), 429,
+    file + ': structured HTTP 429 errors must be classified for bounded retry');
 }
 
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
