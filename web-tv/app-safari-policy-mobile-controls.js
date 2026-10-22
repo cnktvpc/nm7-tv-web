@@ -929,7 +929,7 @@ function retryTv360Resolver(c,cand,gen,reason){
  if(S.retryPending)return true;
  var key=String(c.id||c.name||'')+'|'+String(cand.url||'');
  if(S.tv360404RetryKey!==key){S.tv360404RetryKey=key;S.tv360404RetryCount=0}
- if(S.tv360404RetryCount>=2)return false;
+ if(S.tv360404RetryCount>=5)return false;
  S.tv360404RetryCount++;
  var attempt=S.tv360404RetryCount;
  if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}
