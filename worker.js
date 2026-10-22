@@ -53,7 +53,7 @@ function enrichChannels(channels){
         }catch{}
       }
     }
-    c.candidates.sort((a,b)=>score(String(b.url||''))-score(String(a.url||'')));
+    c.candidates.sort((a,b)=>(Number(!!b.tv360EventFeed)-Number(!!a.tv360EventFeed))||(score(String(b.url||''))-score(String(a.url||''))));
   }
   return out
 }
@@ -242,7 +242,7 @@ function mergeTv360EventKeys(channels,eventChannels){
     if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
     const number=channelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
     const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
-      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&validClearKey(candidate.drm.key)&&
+      candidate&&candidate.url&&isHttp(candidate.url)&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&validClearKey(candidate.drm.key)&&
       (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
     if(eventCandidate)activeByNumber.set(number,eventCandidate);
   }
@@ -251,12 +251,32 @@ function mergeTv360EventKeys(channels,eventChannels){
     if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
     const number=channelNumber(channel),eventCandidate=activeByNumber.get(number);
     if(!number||!eventCandidate||!Array.isArray(channel.candidates))continue;
-    for(const candidate of channel.candidates){
-      let resolver=false;
-      try{const url=new URL(String(candidate&&candidate.url||''));resolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
-      if(!resolver)continue;
-      candidate.drm={type:'clearkey',key:eventCandidate.drm.key};candidate.dash=true;candidate.type='dash';updated++;
+    const eventUrl=String(eventCandidate.url||'');
+    let matching=channel.candidates.find(candidate=>String(candidate&&candidate.url||'')===eventUrl);
+    if(!matching){
+      // Pair the active event's own media endpoint with the ClearKey KID from
+      // that same M3U entry. A generic TV360+N resolver can rotate/remap to a
+      // different live event while its KID stays unrelated to this event key.
+      matching={
+        ...eventCandidate,
+        headers:{...(eventCandidate.headers||{})},
+        drm:{type:'clearkey',key:eventCandidate.drm.key},
+        type:'dash',dash:true,hls:false,
+        forceProxy:true,
+        ua:String(eventCandidate.ua||'Dalvik/2.1.0'),
+        tv360EventFeed:true
+      };
+      channel.candidates.unshift(matching);
+      updated++;
+    }else{
+      matching.drm={type:'clearkey',key:eventCandidate.drm.key};
+      matching.type='dash';matching.dash=true;matching.hls=false;
+      matching.forceProxy=true;matching.tv360EventFeed=true;
+      if(!matching.ua)matching.ua=String(eventCandidate.ua||'Dalvik/2.1.0');
+      updated++;
     }
+    // Keep resolver candidates as fallbacks, but do not transfer this event
+    // feed's key onto them: they can resolve to a different live-event KID.
   }
   return updated;
 }
