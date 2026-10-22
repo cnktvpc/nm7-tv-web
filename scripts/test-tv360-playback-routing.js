@@ -22,47 +22,57 @@ assert.match(worker, /h\.set\('User-Agent',q\.get\('ua'\)\|\|fallbackUA\)/,
 assert.ok(worker.includes('newCacheSchema') && worker.includes('safeGetter') && worker.includes('safeProxyFirst'),
   'Worker runtime patch must invalidate stale cache and guard/route TV360 candidates');
 
-const mergeStart = worker.indexOf('function mergeTv360EventKeys(channels,eventChannels){');
+const helperStart = worker.indexOf('function normalizeClearKeyKid(value){');
+const helperEnd = worker.indexOf('\nasync function probeTv360ResolverKids(channels,eventChannels){', helperStart);
+const mergeStart = worker.indexOf('function mergeTv360EventKeys(channels,eventChannels,manifestKidsByUrl){');
 const mergeEnd = worker.indexOf('\nasync function refreshTv360EventKeys(channels){', mergeStart);
-assert.ok(mergeStart >= 0 && mergeEnd > mergeStart, 'Worker must pair TV360 event channels with their own stream');
-const mergeTv360EventKeys = vm.runInNewContext('(' + worker.slice(mergeStart, mergeEnd).trim() + ')', {
-  URL,
-  isHttp: value => String(value || '').startsWith('http://') || String(value || '').startsWith('https://')
-});
-const fixtureResolverKey = '00112233445566778899aabbccddeeff:ffeeddccbbaa99887766554433221100';
-const fixtureEventKey = '856f291af35a5db7b7d0c944b32993b9:aa3547547f084fe4c9ea5206effb6b78';
-const resolverFixture = {
-  name: 'TV360+13', group: 'Sự Kiện TV360',
-  candidates: [{
-    url: 'https://vmttv.dpdns.org/tv360/?id=tv360-13',
-    type: 'dash', dash: true, forceProxy: true,
-    drm: {type:'clearkey',key:fixtureResolverKey}
-  }]
+assert.ok(helperStart >= 0 && helperEnd > helperStart && mergeStart >= 0 && mergeEnd > mergeStart,
+  'Worker must expose safe TV360 KID validation and merge helpers');
+const tv360MergeHarness = vm.runInNewContext(
+  '(function(){' + worker.slice(helperStart, helperEnd) + '\n' +
+  worker.slice(mergeStart, mergeEnd) +
+  '\nreturn {mergeTv360EventKeys:mergeTv360EventKeys,clearKeyKidIds:clearKeyKidIds};})()',
+  {URL, atob}
+);
+const staleEventKey = '856f291af35a5db7b7d0c944b32993b9:aa3547547f084fe4c9ea5206effb6b78';
+const currentResolverKey = JSON.stringify({keys:[{kty:'oct',kid:'41ce0eac12eb58f69607df0d2eaff649',k:'aa3547547f084fe4c9ea5206effb6b78'}],type:'temporary'});
+const channel13 = {
+  name:'TV360+13',group:'Sự Kiện TV360',
+  candidates:[{url:'https://vmttv.dpdns.org/tv360/?id=tv360-13',type:'dash',dash:true,
+    forceProxy:true,drm:{type:'clearkey',key:currentResolverKey}}]
 };
-const eventFixture = {
-  name: 'Golf event, Kênh TV360+ 13', group: 'Sự Kiện TV360',
-  candidates: [{
-    url: 'https://dekki.bacbenny95.workers.dev/film4k/stream/channel/10022',
-    type: 'dash', dash: true,
-    drm: {type:'clearkey',key:fixtureEventKey}
-  }]
+const event13 = {
+  name:'Golf event, Kênh TV360+ 13',group:'Sự Kiện TV360',
+  candidates:[{url:'https://dekki.bacbenny95.workers.dev/film4k/stream/channel/10022',
+    type:'dash',dash:true,drm:{type:'clearkey',key:staleEventKey}}]
 };
-const mergedCount = mergeTv360EventKeys([resolverFixture],[eventFixture]);
-assert.equal(mergedCount, 1, 'A matching TV360 event must add its event-specific media candidate');
-assert.equal(resolverFixture.candidates[0].url, eventFixture.candidates[0].url,
-  'Event-specific URL must be tried before the independently mapped resolver');
-assert.equal(resolverFixture.candidates[0].tv360EventFeed, true,
-  'Event media candidate must carry an explicit priority marker');
-assert.equal(resolverFixture.candidates[0].forceProxy, true,
-  'Event media candidate must use the Worker proxy');
-assert.equal(resolverFixture.candidates[0].drm.key, fixtureEventKey,
-  'Event media candidate must retain the ClearKey pair from the same M3U entry');
-assert.equal(resolverFixture.candidates[1].url, 'https://vmttv.dpdns.org/tv360/?id=tv360-13',
-  'The original resolver must remain as a fallback');
-assert.equal(resolverFixture.candidates[1].drm.key, fixtureResolverKey,
-  'Event key must not be copied onto a resolver that can return another KID');
-assert.ok(worker.includes("Number(!!b.tv360EventFeed)-Number(!!a.tv360EventFeed"),
-  'Worker channel sorting must prioritize the paired event media candidate');
+const KID13='41ce0eac12eb58f69607df0d2eaff649';
+const resolver13=channel13.candidates[0].url;
+const count13=tv360MergeHarness.mergeTv360EventKeys([channel13],[event13],new Map([[resolver13,new Set([KID13])]]));
+assert.equal(count13,0,'A stale event key must not overwrite a resolver key when the current MPD advertises another KID');
+assert.equal(channel13.candidates.length,1,'A mismatched event source must not be inserted as a preferred stream');
+assert.equal(channel13.candidates[0].drm.key,currentResolverKey,'Existing current resolver key metadata must be preserved');
+assert.deepEqual([...tv360MergeHarness.clearKeyKidIds(currentResolverKey)],[KID13],
+  'ClearKey KIDs in the original JSON license metadata must be parsed correctly');
+
+const key15='fa4033841a70511c84a7fe7e0daf1a6a:237d5bce065aa40fc4c8839cd8827cd2';
+const channel15={name:'TV360+15',group:'Sự Kiện TV360',candidates:[{
+  url:'https://vmttv.dpdns.org/tv360/?id=tv360-15',type:'dash',dash:true,forceProxy:true,
+  drm:{type:'clearkey',key:'c305b22dfd6d55e3998ab279cc98e0d3:ffeeddccbbaa99887766554433221100'}
+}]};
+const event15={name:'Bi-a event, Kênh TV360+ 15',group:'Sự Kiện TV360',candidates:[{
+  url:'https://dekki.bacbenny95.workers.dev/film4k/stream/channel/10024',type:'dash',dash:true,
+  drm:{type:'clearkey',key:key15}
+}]};
+const resolver15=channel15.candidates[0].url;
+const count15=tv360MergeHarness.mergeTv360EventKeys([channel15],[event15],
+  new Map([[resolver15,new Set(['fa4033841a70511c84a7fe7e0daf1a6a'])]]));
+assert.equal(count15,1,'A current manifest KID match must allow the event ClearKey to repair a stale resolver key');
+assert.equal(channel15.candidates[0].drm.key,key15,'Only a KID-verified ClearKey pair may replace the stale key');
+assert.ok(worker.includes('async function probeTv360ResolverKids(channels,eventChannels)'),
+  'Worker must probe live resolver MPDs before merging event keys');
+assert.ok(worker.includes('dashManifestKidIds(body)'),
+  'Worker must read the current MPD default_KID instead of assuming resolver IDs are stable');
 
 for (const file of runtimeFiles) {
   const source = fs.readFileSync(file, 'utf8');
