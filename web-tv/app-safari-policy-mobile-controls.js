@@ -747,6 +747,12 @@ function startupCandidateIndex(c){
 
 function shouldProxyFirst(cand,kind){
  cand=normalizeCandidate(cand||{});
+ // The web runtime must proxy TV360 resolver sources even if the cached or
+ // parsed candidate lost its forceProxy flag; the resolver can redirect to a
+ // CDN response that rejects direct browser playback.
+ if(isTv360ResolverUrl(cand.url||''))return true;
+ var activeChannel=S.current||{};
+ if(/^TV360\\s*\\+\\s*\\d+$/i.test(String(activeChannel.name||''))&&/tv360/i.test(String(activeChannel.group||'')))return true;
  // Production diagnostics confirmed the SCTV4K upstream manifest is HTTP 200,
  // but its child TS segments return HTTP 400 directly and HTTP 200 via Worker.
  // Start this known source through the proxy instead of wasting a direct attempt.
