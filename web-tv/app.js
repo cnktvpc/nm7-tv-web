@@ -900,22 +900,27 @@ function isStalkerTsCandidate(cand,kind){
   return u.pathname.toLowerCase().endsWith('/play/live.php')&&q.has('mac')&&q.has('stream')&&q.has('extension')&&(q.has('play_token')||q.has('token'));
  }catch(e){return false}
 }
-function tv360Http404FromShaka(e){
+function tv360TransientHttpStatusFromShaka(e){
+ function retryableStatus(n){return n===404||n===408||n===429||(n>=500&&n<=599)}
  var todo=[e&&e.data],seen=0;
  while(todo.length&&seen++<64){
   var value=todo.shift();
-  if(!value)continue;
+  if(value==null)continue;
+  if(typeof value==='number'){if(retryableStatus(value))return value;continue}
   if(typeof value==='string'){
-   if(/(?:http|status|response)[^0-9]{0,24}404/i.test(value))return 404;
+   var match=/(?:http|status|response)[^0-9]{0,24}(404|408|429|5\\d{2})/i.exec(value);
+   if(match)return Number(match[1]);
    continue;
   }
   if(Array.isArray(value)){
-   for(var i=0;i<value.length;i++)if(value[i]&&(typeof value[i]==='object'||typeof value[i]==='string'))todo.push(value[i]);
+   for(var i=0;i<value.length;i++)if(value[i]!=null&&(typeof value[i]==='object'||typeof value[i]==='string'||typeof value[i]==='number'))todo.push(value[i]);
    continue;
   }
   if(typeof value!=='object')continue;
-  for(var k of ['status','statusCode','httpStatus','responseCode'])if(Number(value[k])===404)return 404;
-  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'))todo.push(value[k]);
+  for(var k of ['status','statusCode','httpStatus','responseCode']){
+   var status=Number(value[k]);if(retryableStatus(status))return status;
+  }
+  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'||typeof value[k]==='number'))todo.push(value[k]);
  }
  return 0
 }
@@ -1137,7 +1142,7 @@ function tryHlsJs(c,cand,url,gen){
    // Do not wait for HLS.js retry backoff when an upstream explicitly rejects
    // the manifest/segment. Switch direct <-> proxy immediately on HTTP 4xx/5xx.
    if(httpStatus>=400&&httpStatus<=599){
-    if(httpStatus===404&&retryTv360Resolver(c,cand,gen,'HLS HTTP 404'))return;
+    if((httpStatus===404||httpStatus===408||httpStatus===429||httpStatus>=500)&&retryTv360Resolver(c,cand,gen,'HLS HTTP '+httpStatus))return;
     nextCandidate('HLS HTTP '+httpStatus+' · '+(S.proxyAttempt?'proxy lỗi':'nguồn trực tiếp lỗi'));
     return;
    }
@@ -1470,7 +1475,8 @@ function startShaka(c,cand,url,drm,gen){
     setStatus('DRM lỗi '+code+'\n'+c.name);
     return;
    }
-   if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka HTTP 404'))return;
+   var tv360Status=tv360TransientHttpStatusFromShaka(e);
+   if(tv360Status&&retryTv360Resolver(c,cand,gen,'Shaka HTTP '+tv360Status))return;
    nextCandidate('DASH/DRM lỗi '+code);
   });
 
@@ -1480,7 +1486,8 @@ function startShaka(c,cand,url,drm,gen){
   }).catch(function(e){
    if(gen!==S.generation)return;
    dbg('Shaka load '+(e.code||'')+' cat='+(e.category||'')+' '+(e.message||''));
-   if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP 404'))return;
+   var tv360LoadStatus=tv360TransientHttpStatusFromShaka(e);
+   if(tv360LoadStatus&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP '+tv360LoadStatus))return;
    if(appleDrm){
     if(transientDrmError(e)&&retryDrmInPlace(c,cand,url,p,gen,e))return;
     if(hardRestartDrm(c,cand,gen,'load failure '+(e.code||'')))return;
