@@ -1038,8 +1038,11 @@ function probeCandidate(c,cand,gen){
    if(retryTv360Resolver(c,cand,gen,transientReason))return;
    nextCandidate(transientReason);return;
   }
-  if(isTv360&&upstreamStatus>=400){
-   nextCandidate('TV360 resolver HTTP '+upstreamStatus+' · '+String(d&&d.errorHint||'upstream lỗi'));
+  if(upstreamStatus===0&&(getStatus===0||headStatus>=400)){
+   nextCandidate('Probe upstream mạng/timeout');return;
+  }
+  if(upstreamStatus>=400){
+   nextCandidate((isTv360?'TV360 resolver':'Probe upstream')+' HTTP '+upstreamStatus+' · '+String(d&&d.errorHint||'upstream lỗi'));
    return;
   }
   if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){
