@@ -1,3 +1,17 @@
+## 2026-10-22 — Sửa logo kênh và xác minh Worker production
+
+- **Đã deploy trực tiếp lên Cloudflare Workers:** version **499**, version ID `112ad8d5-a43e-4e6a-83ea-594cf88e3adc`, deployment ID `68b84d70-7395-446d-99f8-f62a6d51610e`, traffic 100% (2026-10-22 03:12:19 UTC).
+- **Nguyên nhân và sửa lỗi:** Static Assets phục vụ script giao diện trực tiếp nên bản vá ở Worker không được chạy khi tải đường dẫn gốc. Worker hiện chuyển URL script sang `/web-tv/app-safari-policy-*-controls.js` để đi qua nhánh Worker xử lý asset. Sửa regex thay thế để loại bỏ tiền tố `./` (tránh URL sai `.//web-tv/...`) và chèn bản vá kích hoạt logo/cuộn **bên trong IIFE** để dùng đúng biến nội bộ.
+- **Kiểm thử production PASS bằng ảnh chụp trình duyệt thật từ Cloudflare Browser Rendering:** trang dọc 360×720 và ngang 480×320 đã hiện danh sách kênh cùng logo VTV1 HD, VTV2/VTV3, SCTV và VTVCab. Đường dẫn script mobile trả HTTP 200, có marker `NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH` nằm trước `})();`; đường dẫn PC cũng trả HTTP 200 và marker tương tự.
+- **Playlist/image smoke PASS:** `/api/playlist?source=tv&default=1` trả HTTP 200, có mảng `channels` và URL logo VTV1; `/api/image` tải được logo VTV1 HD qua proxy.
+- **Binding được giữ nguyên:** `ASSETS`, `PLAYLIST_SOURCE=phuongnm7-playlist`, `THETHAO_SOURCE=thethaonm7`. Phạm vi chỉ là NM7 TV Web/Worker; không sửa NM7 TV Android hoặc NM7 Mobile.
+- **CI còn hạn chế:** các workflow liên quan đến commit `98a12d3` thất bại sau khoảng 3 giây, job không có steps/log do runner chưa khởi chạy. Vì vậy bản production ở trên được upload qua Cloudflare API và xác minh bằng smoke production; không đánh dấu GitHub Actions là PASS. Bộ scrape DOM của Browser Rendering vẫn đôi lúc báo “Đang tải truyền hình…” dù ảnh chụp cùng production hiển thị logo, nên kết quả UI được đánh giá theo ảnh chụp và HTTP/runtime smoke chứ không theo scrape DOM đó.
+
+Production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+
+---
+
 ## 2026-10-21 — Hoàn tất deploy runtime retry TV360 và xác minh production
 
 - **Deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã chạy Wrangler thành công. Cloudflare Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.
