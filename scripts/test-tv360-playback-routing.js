@@ -97,6 +97,47 @@ assert.ok(worker.includes('const probeSucceeded=attemptedGet?(getStatus>=200&&ge
 assert.ok(worker.includes('type:probeSucceeded?type:"http",contentType:ct,status,headStatus,getStatus,errorHint,'),
   'Failed upstream responses must not be exposed as valid DASH/HLS probe results');
 
+// DASH relative-template regression: ../_shared resources must each get a new
+// proxy context based on their resolved upstream directory. They must never be
+// emitted as ../ paths beneath /api/dash-resource/<token>/, which loses the token.
+const safeUrlStart = worker.indexOf('function safeUrl(u,b){');
+const safeUrlEnd = worker.indexOf('function isTv360ResolverUrl(', safeUrlStart);
+const dashHelpersStart = worker.indexOf('function encodeDashContext(value){');
+const dashHelpersEnd = worker.indexOf('async function dashResourceResponse(', dashHelpersStart);
+assert.ok(safeUrlStart >= 0 && safeUrlEnd > safeUrlStart && dashHelpersStart >= 0 && dashHelpersEnd > dashHelpersStart,
+  'Worker must expose safe URL and DASH proxy helpers for regression testing');
+const dashHarness = vm.runInNewContext(
+  '(function(){' + worker.slice(safeUrlStart, safeUrlEnd) + '\\n' +
+  worker.slice(dashHelpersStart, dashHelpersEnd) +
+  '\\nreturn {rewriteDash:rewriteDash,decodeDashContext:decodeDashContext};})()',
+  {
+    URL, URLSearchParams, TextEncoder, TextDecoder,
+    btoa: value => Buffer.from(value, 'binary').toString('base64'),
+    atob: value => Buffer.from(value, 'base64').toString('binary')
+  }
+);
+const sampleMpd = '<MPD><BaseURL>https://cdn.tv360.example/live/session/</BaseURL>' +
+  '<Period><AdaptationSet contentType="video"><SegmentTemplate ' +
+  'initialization="../_shared/init-$RepresentationID$.mp4" ' +
+  'media="../_shared/segment-$Number$.m4s"/>' +
+  '<Representation id="video_1" bandwidth="1000000"/></AdaptationSet></Period></MPD>';
+const rewrittenMpd = dashHarness.rewriteDash(
+  sampleMpd, 'https://cdn.tv360.example/live/manifest.mpd',
+  new URLSearchParams(), 'https://nm7-tv-web.example'
+);
+const initUri = (rewrittenMpd.match(/initialization="([^"]+)"/i) || [])[1];
+const mediaUri = (rewrittenMpd.match(/media="([^"]+)"/i) || [])[1];
+assert.ok(initUri && initUri.startsWith('https://nm7-tv-web.example/api/dash-resource/'),
+  'Relative DASH initialization URI must be rewritten to a context-bearing proxy URL');
+assert.ok(mediaUri && mediaUri.startsWith('https://nm7-tv-web.example/api/dash-resource/'),
+  'Relative DASH media template must be rewritten to a context-bearing proxy URL');
+assert.ok(!initUri.includes('../') && !mediaUri.includes('../'),
+  'Proxied DASH resources must not contain parent traversal paths');
+const initToken = new URL(initUri).pathname.split('/')[3];
+const initContext = dashHarness.decodeDashContext(initToken);
+assert.equal(initContext.base, 'https://cdn.tv360.example/live/_shared/',
+  'Relative initialization path must resolve against the original upstream BaseURL before proxying');
+
 for (const file of runtimeFiles) {
   const source = fs.readFileSync(file, 'utf8');
   const probeStart = source.indexOf('function probeCandidate(c,cand,gen){');
