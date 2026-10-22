@@ -23,6 +23,9 @@ const BUILTIN = {
 
 };
 const playlistCache=new Map(),CACHE_TTL=30000;
+const TV360_EVENT_KEY_SOURCE='https://raw.githubusercontent.com/Bacbenny/dekiki/main/film4k.m3u';
+const TV360_EVENT_KEY_CACHE_TTL=45000;
+let tv360EventKeyCache={time:0,channels:null};
 function isHttp(u){return /^https?:\/\//i.test(String(u||''))}
 function safeUrl(u,b){try{return new URL(u,b).toString()}catch{return String(u||'')}}
 function isTv360ResolverUrl(value){try{var u=new URL(String(value||''));return u.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(u.pathname)}catch(e){return false}}
@@ -206,6 +209,72 @@ async function fetchPlaylistTarget(target,init={},env=null,ms=10000){
   }
   return fetchWithTimeout(target,init,ms);
 }
+function mergeTv360EventKeys(channels,eventChannels){
+  const channelNumber=(channel)=>{
+    const values=[channel&&channel.name,channel&&channel.id,channel&&channel.tvgId];
+    const patterns=[/(?:k[eê]nh\s*)?tv360\s*\+\s*(\d{1,2})/i,/\btv360plus\s*(\d{1,2})\b/i,/\btv360-(\d{1,2})\b/i];
+    for(const value of values){const text=String(value||'');for(const pattern of patterns){const match=pattern.exec(text);if(match)return Number(match[1])||0}}
+    return 0;
+  };
+  const is16Bytes=(value)=>{
+    const text=String(value||'').trim().replace(/^["']|["']$/g,'');
+    if(/^[0-9a-f]{32}$/i.test(text))return true;
+    if(!/^[A-Za-z0-9_+\/-]{22,24}={0,2}$/.test(text))return false;
+    try{let encoded=text.replace(/-/g,'+').replace(/_/g,'/');encoded+='='.repeat((4-encoded.length%4)%4);return atob(encoded).length===16}catch{return false}
+  };
+  const validClearKey=(value)=>{
+    const text=String(value||'').trim();if(!text||/^https?:\/\//i.test(text))return false;
+    const validPair=(kid,key)=>is16Bytes(kid)&&is16Bytes(key);
+    if(text[0]==='{'){
+      try{
+        const data=JSON.parse(text);
+        if(Array.isArray(data.keys))return data.keys.some(entry=>entry&&validPair(entry.kid||entry.keyId,entry.k||entry.key));
+        if(data.keys&&typeof data.keys==='object')return Object.keys(data.keys).some(kid=>validPair(kid,data.keys[kid]));
+        if(data.kid&&(data.k||data.key))return validPair(data.kid,data.k||data.key);
+      }catch{}
+      return false;
+    }
+    for(const part of text.split(/[;,\s]+/)){const index=part.indexOf(':');if(index>0&&part.indexOf(':',index+1)<0&&validPair(part.slice(0,index),part.slice(index+1)))return true}
+    return false;
+  };
+  const activeByNumber=new Map();
+  for(const eventChannel of Array.isArray(eventChannels)?eventChannels:[]){
+    if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
+    const number=channelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
+    const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
+      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&validClearKey(candidate.drm.key)&&
+      (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
+    if(eventCandidate)activeByNumber.set(number,eventCandidate);
+  }
+  let updated=0;
+  for(const channel of Array.isArray(channels)?channels:[]){
+    if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
+    const number=channelNumber(channel),eventCandidate=activeByNumber.get(number);
+    if(!number||!eventCandidate||!Array.isArray(channel.candidates))continue;
+    for(const candidate of channel.candidates){
+      let resolver=false;
+      try{const url=new URL(String(candidate&&candidate.url||''));resolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
+      if(!resolver)continue;
+      candidate.drm={type:'clearkey',key:eventCandidate.drm.key};candidate.dash=true;candidate.type='dash';updated++;
+    }
+  }
+  return updated;
+}
+async function refreshTv360EventKeys(channels){
+  try{
+    const now=Date.now();
+    if(!tv360EventKeyCache.channels||now-tv360EventKeyCache.time>=TV360_EVENT_KEY_CACHE_TTL){
+      const response=await fetchWithTimeout(TV360_EVENT_KEY_SOURCE,{headers:{'User-Agent':'NM7-TV-Web/1.0.69','Accept':'application/vnd.apple.mpegurl,text/plain,*/*'}},9000);
+      if(!response.ok)throw new Error('event key feed HTTP '+response.status);
+      const text=await response.text(),eventChannels=parseM3U(text,TV360_EVENT_KEY_SOURCE);
+      if(!eventChannels.length)throw new Error('event key feed empty');
+      tv360EventKeyCache={time:now,channels:eventChannels};
+    }
+    const updated=mergeTv360EventKeys(channels,tv360EventKeyCache.channels);
+    return {status:updated?'applied':'no-current-event-match',updated};
+  }catch{return {status:'unavailable',updated:0}}
+}
+
 async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=false){
   if(!SOURCES[source])return new Response(JSON.stringify({channels:[],source}),{status:400,headers:{'Content-Type':'application/json'}});
   const choice=String(defaultChoice||'');
@@ -215,7 +284,7 @@ async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=fa
   const now=Date.now(),hit=playlistCache.get(cacheKey);
   // Manual/explicit sport refresh bypasses the isolate-local cache, while all
   // other sources continue to use the existing 30-second cache.
-  if(!forceRefresh&&hit&&now-hit.time<CACHE_TTL)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,preset,upstream:hit.upstream}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+  if(!forceRefresh&&hit&&now-hit.time<CACHE_TTL)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,preset,upstream:hit.upstream,tv360KeyRefresh:hit.tv360KeyRefresh||null}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   const errors=[];
   const targets=isDefault?(preset===2?[SOURCES.tv[1]]:[SOURCES.tv[0],SOURCES.tv[1]]):SOURCES[source];
   for(const target of targets){try{
@@ -224,10 +293,11 @@ async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=fa
     const r=useBinding
       ?await env.PLAYLIST_SOURCE.fetch(new Request(target,init))
       :await fetchPlaylistTarget(target,init,env,10000);if(!r.ok)throw new Error('HTTP '+r.status);const body=await r.text();let channels=parseM3U(body,target);if(!channels.length){try{const j=JSON.parse(body),arr=Array.isArray(j)?j:(Array.isArray(j.channels)?j.channels:Array.isArray(j.data)?j.data:[]);channels=arr.map(x=>({name:String(x.name||x.title||x.channel||'Kênh'),group:String(x.group||x.groupTitle||x.category||'Khác'),logo:String(x.logo||x.tvgLogo||''),id:String(x.id||x.tvgId||x.name||x.title||''),candidates:Array.isArray(x.candidates)?x.candidates:(x.url||x.stream||x.src?[{url:x.url||x.stream||x.src,ref:x.ref||x.referer||'',ua:x.ua||x.userAgent||'',headers:x.headers||{},type:x.type||'',dash:x.type==='dash',hls:x.type==='hls'}]:[])}))}catch{}}if(!channels.length)throw new Error('playlist rỗng');
+    const tv360KeyRefresh=isDefault?await refreshTv360EventKeys(channels):null;
     enrichChannels(channels);
-    playlistCache.set(cacheKey,{time:now,channels,upstream:target});
-    return new Response(JSON.stringify({channels,source,cached:false,preset:isDefault?preset:undefined,upstream:target,refreshed:forceRefresh}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch(e){errors.push(target+': '+e.message)}}
-  if(hit&&hit.channels?.length)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,stale:true,error:errors.join(' | ')}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+    playlistCache.set(cacheKey,{time:now,channels,upstream:target,tv360KeyRefresh});
+    return new Response(JSON.stringify({channels,source,cached:false,preset:isDefault?preset:undefined,upstream:target,refreshed:forceRefresh,tv360KeyRefresh}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch(e){errors.push(target+': '+e.message)}}
+  if(hit&&hit.channels?.length)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,stale:true,error:errors.join(' | '),tv360KeyRefresh:hit.tv360KeyRefresh||null}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   return new Response(JSON.stringify({channels:[],source,error:errors.join(' | ')}),{status:504,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 }
 function sniffPayloadKind(bytes){
