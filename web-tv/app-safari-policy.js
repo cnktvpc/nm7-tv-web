@@ -856,7 +856,17 @@ function clearPlayers(){
 }
 function setStatus(s,show){$('status').textContent=s||'';$('status').style.display=show===false?'none':'flex'}
 function hideStatus(){$('status').style.display='none'}
-function getCandidate(){return S.current&&S.current.candidates?normalizeCandidate(S.current.candidates[S.candidateIndex]):null}
+function getCandidate(){
+ var a=S.current&&Array.isArray(S.current.candidates)?S.current.candidates:[];
+ if(!a.length)return null;
+ var requested=Number(S.candidateIndex);
+ if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;
+ for(var offset=0;offset<a.length;offset++){
+  var i=(requested+offset)%a.length,c=a[i],u=String(c&&(c.resolvedUrl||c.url)||'').trim();
+  if(u&&u!=='undefined'&&u!=='null'&&u!=='NaN'){S.candidateIndex=i;return normalizeCandidate(c)}
+ }
+ return null
+}
 
 function openPlayer(c){
  var sourceId=String(c&&c.id||'').toLowerCase().replace(/[\\s_-]+/g,'');
