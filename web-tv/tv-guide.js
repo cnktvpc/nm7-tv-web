@@ -3,6 +3,7 @@
 
   var core = window.NM7EPGCore;
   var $ = function(id) { return document.getElementById(id); };
+  var DEFAULT_EPG_URL = 'https://free-epg.de/api/epg/vn.xml.gz';
   var URL_KEY = 'nm7:epgUrl';
   var CACHE_PREFIX = 'nm7:epgCache:';
   var state = {
@@ -389,6 +390,12 @@
     loadPlaylist().then(function(ok) {
       if (!ok) return;
       if (!initialUrl && $('epgUrl').value.trim()) initialUrl = $('epgUrl').value.trim();
+      if (!initialUrl && !$('epgUrl').value.trim()) {
+        initialUrl = DEFAULT_EPG_URL;
+        $('epgUrl').value = initialUrl;
+        localSet(URL_KEY, initialUrl);
+        $('sourceHint').textContent = 'Playlist chưa khai báo EPG. NM7 đang dùng nguồn XMLTV cộng đồng FreeEPG Việt Nam làm mặc định; nguồn có thể không bao phủ mọi kênh. Có thể nhập URL khác ở đây.';
+      }
       if (initialUrl || $('epgUrl').value.trim()) loadSchedule(false);
       else {
         $('matchedStat').textContent = '—';
