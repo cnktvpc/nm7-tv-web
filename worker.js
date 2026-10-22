@@ -673,6 +673,8 @@ async function probeResponse(request,q){
         contentType:mr.headers.get("content-type")||"",
         server:mr.headers.get("server")||"",
         cfRayPresent:!!mr.headers.get("cf-ray"),
+        accessControlAllowOrigin:mr.headers.get("access-control-allow-origin")||"",
+        accessControlAllowCredentials:mr.headers.get("access-control-allow-credentials")||"",
         redirectPresent:!!location,
         redirectHost:locationHost,
         redirectScheme:redirectUrl?.protocol||"",
@@ -795,6 +797,10 @@ async function probeResponse(request,q){
     serverType:r?.headers.get("server")||"",
     viaPresent:!!r?.headers.get("via"),
     cfRayPresent:!!r?.headers.get("cf-ray"),
+    accessControlAllowOrigin:r?.headers.get("access-control-allow-origin")||"",
+    accessControlAllowCredentials:r?.headers.get("access-control-allow-credentials")||"",
+    acceptRanges:r?.headers.get("accept-ranges")||"",
+    contentRangePresent:!!r?.headers.get("content-range"),
     wwwAuthenticatePresent:!!r?.headers.get("www-authenticate"),
     retryAfter:r?.headers.get("retry-after")||""
   }),{headers:{"Content-Type":"application/json","Cache-Control":"no-store","Access-Control-Allow-Origin":"*"}});
