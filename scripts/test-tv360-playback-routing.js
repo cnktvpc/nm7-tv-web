@@ -43,9 +43,9 @@ for (const file of runtimeFiles) {
 }
 
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2&retryToast=20261019-cleanup1'),
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load1&retryToast=20261019-cleanup1'),
   'HTML must bump the active runtime cache key for the TV360 fix');
-assert.ok(worker.includes('20261021-tv360-retry404-2'),
+assert.ok(worker.includes('20261022-logo-scroll-load1'),
   'Worker PC/mobile runtime fallbacks must use the same cache key');
 
 console.log('TV360_PLAYBACK_ROUTING_REGRESSION_OK');
