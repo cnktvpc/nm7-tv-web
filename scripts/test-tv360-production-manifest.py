@@ -209,6 +209,7 @@ def check_dash_children(channel_id, body):
         if timeline is not None:
             entries = timeline.findall("d:S", ns)
             cursor = 0
+            total_segments = 0
             for idx, segment in enumerate(entries):
                 if segment.get("t") is not None:
                     cursor = int(segment.get("t"))
@@ -230,14 +231,21 @@ def check_dash_children(channel_id, body):
                         live_units = max(0.0, (time.time() - ast - period_start) * timescale + pto)
                         # Avoid the newest not-yet-published fragment in this live MPD.
                         target = max(cursor, int(live_units - 5 * timescale))
-                        count = max(1, int((target - cursor) // d) + 1)
+                        last_offset = max(0, int((target - cursor) // d))
+                        count = last_offset + 1
                     else:
                         count = 1
                 else:
                     count = 1
-                for offset in range(count):
-                    points.append((cursor + offset * d, start_number + len(points)))
+                # Keep only recent points; some dynamic MPDs have r=-1 spanning
+                # many hours, so materializing every historical segment is unsafe.
+                first_needed = max(0, count - 10)
+                for offset in range(first_needed, count):
+                    points.append((cursor + offset * d, start_number + total_segments + offset))
+                total_segments += count
                 cursor += count * d
+                if len(points) > 20:
+                    points = points[-20:]
         elif duration > 0 and ast:
             live_units = max(0.0, (time.time() - ast - period_start) * timescale + pto)
             latest = max(0, int(live_units // duration))
