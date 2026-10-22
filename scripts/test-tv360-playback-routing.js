@@ -14,7 +14,7 @@ const runtimeFiles = [
 
 assert.match(worker, /function isTv360ResolverUrl\(value\)/,
   'Worker must identify the TV360 resolver endpoint');
-assert.ok(worker.includes(String.raw`forceProxy:/vietanhtv\\.id\\.vn/i.test(ps[0])||isTv360ResolverUrl(ps[0])`),
+assert.match(worker, /forceProxy:\/vietanhtv.*isTv360ResolverUrl\(ps\[0\]\)/,
   'M3U parsing must mark TV360 resolver candidates as proxy-first');
 assert.match(worker, /h\.set\('User-Agent',q\.get\('ua'\)\|\|fallbackUA\)/,
   'Worker stream proxy must preserve an explicit playlist User-Agent');
