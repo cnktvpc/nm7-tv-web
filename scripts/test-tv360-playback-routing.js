@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const vm = require('node:vm');
 
 const worker = fs.readFileSync('worker.js', 'utf8');
 const runtimeFiles = [
@@ -66,5 +67,23 @@ for (const file of runtimeFiles) {
     file + ': probe transport errors must retry before abandoning TV360');
   assert.ok(source.includes('Shaka init exception '),
     file + ': Shaka initialization exceptions must retain their actual reason');
+
+  const normalizerStart = source.indexOf('function toHex16(v){');
+  const normalizerEnd = source.indexOf('function restoreAudio(){', normalizerStart);
+  assert.ok(normalizerStart >= 0 && normalizerEnd > normalizerStart,
+    file + ': ClearKey normalizer must exist');
+  const normalizerSource = source.slice(normalizerStart, normalizerEnd).trim();
+  const normalizeHex16 = vm.runInNewContext('(' + normalizerSource + ')', {
+    atob: value => Buffer.from(value, 'base64').toString('binary')
+  });
+  const keyBytes = Buffer.from([251, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+  const base64UrlKey = keyBytes.toString('base64url');
+  assert.match(base64UrlKey, /[-_]/,
+    'fixture must contain a Base64URL-only character');
+  assert.equal(normalizeHex16(base64UrlKey), keyBytes.toString('hex'),
+    file + ': valid Base64URL ClearKey data must survive normalization');
+  assert.equal(normalizeHex16('00112233-4455-6677-8899-aabbccddeeff'),
+    '00112233445566778899aabbccddeeff',
+    file + ': hyphenated UUID-style hexadecimal KIDs must still normalize');
 }
 console.log('TV360_PLAYBACK_ROUTING_REGRESSION_OK');
