@@ -23,6 +23,9 @@ const BUILTIN = {
 
 };
 const playlistCache=new Map(),CACHE_TTL=30000;
+const TV360_EVENT_KEY_SOURCE='https://raw.githubusercontent.com/Bacbenny/dekiki/main/film4k.m3u';
+const TV360_EVENT_KEY_CACHE_TTL=45000;
+let tv360EventKeyCache={time:0,channels:null};
 function isHttp(u){return /^https?:\/\//i.test(String(u||''))}
 function safeUrl(u,b){try{return new URL(u,b).toString()}catch{return String(u||'')}}
 function isTv360ResolverUrl(value){try{var u=new URL(String(value||''));return u.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(u.pathname)}catch(e){return false}}
@@ -152,14 +155,16 @@ function rewriteDash(text,finalUrl,q,origin){
     if(!sourceBase.endsWith('/'))sourceBase+='/';
   }
   const proxyBase=dashProxyBase(sourceBase,q,origin);
-  // Absolute or root-relative SegmentTemplate/SegmentURL resources need their own
-  // upstream base context; relative resources inherit the proxied BaseURL above.
+  // Resolve every DASH resource URI against the ORIGINAL upstream BaseURL, then
+  // proxy it with a context token for that resource's actual directory. Relative
+  // paths such as ../_shared/... must not inherit /api/dash-resource/<token>/:
+  // browser URL normalization removes <token> while resolving "..", and the
+  // Worker then rejects the request as "bad dash context".
   text=text.replace(/\b(media|initialization|sourceURL|href)\s*=\s*"([^"]+)"/gi,function(m,attr,value){
     const v=String(value||'').trim();
-    if(/^https?:\/\//i.test(v)||v.startsWith('/')){
-      return attr+'="'+proxyAbsoluteDashUri(v,sourceBase,q,origin)+'"';
-    }
-    return m;
+    if(!v||/^(?:data:|blob:|#)/i.test(v))return m;
+    if(/^[a-z][a-z0-9+.-]*:/i.test(v)&&!/^https?:\/\//i.test(v))return m;
+    return attr+'="'+proxyAbsoluteDashUri(v,sourceBase,q,origin)+'"';
   });
   if(/<BaseURL\b[^>]*\/\s*>/i.test(text)){
     return text.replace(/<BaseURL\b[^>]*\/\s*>/i,'<BaseURL>'+proxyBase+'</BaseURL>');
@@ -204,6 +209,72 @@ async function fetchPlaylistTarget(target,init={},env=null,ms=10000){
   }
   return fetchWithTimeout(target,init,ms);
 }
+function mergeTv360EventKeys(channels,eventChannels){
+  const channelNumber=(channel)=>{
+    const values=[channel&&channel.name,channel&&channel.id,channel&&channel.tvgId];
+    const patterns=[/(?:k[eê]nh\s*)?tv360\s*\+\s*(\d{1,2})/i,/\btv360plus\s*(\d{1,2})\b/i,/\btv360-(\d{1,2})\b/i];
+    for(const value of values){const text=String(value||'');for(const pattern of patterns){const match=pattern.exec(text);if(match)return Number(match[1])||0}}
+    return 0;
+  };
+  const is16Bytes=(value)=>{
+    const text=String(value||'').trim().replace(/^["']|["']$/g,'');
+    if(/^[0-9a-f]{32}$/i.test(text))return true;
+    if(!/^[A-Za-z0-9_+\/-]{22,24}={0,2}$/.test(text))return false;
+    try{let encoded=text.replace(/-/g,'+').replace(/_/g,'/');encoded+='='.repeat((4-encoded.length%4)%4);return atob(encoded).length===16}catch{return false}
+  };
+  const validClearKey=(value)=>{
+    const text=String(value||'').trim();if(!text||/^https?:\/\//i.test(text))return false;
+    const validPair=(kid,key)=>is16Bytes(kid)&&is16Bytes(key);
+    if(text[0]==='{'){
+      try{
+        const data=JSON.parse(text);
+        if(Array.isArray(data.keys))return data.keys.some(entry=>entry&&validPair(entry.kid||entry.keyId,entry.k||entry.key));
+        if(data.keys&&typeof data.keys==='object')return Object.keys(data.keys).some(kid=>validPair(kid,data.keys[kid]));
+        if(data.kid&&(data.k||data.key))return validPair(data.kid,data.k||data.key);
+      }catch{}
+      return false;
+    }
+    for(const part of text.split(/[;,\s]+/)){const index=part.indexOf(':');if(index>0&&part.indexOf(':',index+1)<0&&validPair(part.slice(0,index),part.slice(index+1)))return true}
+    return false;
+  };
+  const activeByNumber=new Map();
+  for(const eventChannel of Array.isArray(eventChannels)?eventChannels:[]){
+    if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
+    const number=channelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
+    const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
+      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&validClearKey(candidate.drm.key)&&
+      (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
+    if(eventCandidate)activeByNumber.set(number,eventCandidate);
+  }
+  let updated=0;
+  for(const channel of Array.isArray(channels)?channels:[]){
+    if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
+    const number=channelNumber(channel),eventCandidate=activeByNumber.get(number);
+    if(!number||!eventCandidate||!Array.isArray(channel.candidates))continue;
+    for(const candidate of channel.candidates){
+      let resolver=false;
+      try{const url=new URL(String(candidate&&candidate.url||''));resolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
+      if(!resolver)continue;
+      candidate.drm={type:'clearkey',key:eventCandidate.drm.key};candidate.dash=true;candidate.type='dash';updated++;
+    }
+  }
+  return updated;
+}
+async function refreshTv360EventKeys(channels){
+  try{
+    const now=Date.now();
+    if(!tv360EventKeyCache.channels||now-tv360EventKeyCache.time>=TV360_EVENT_KEY_CACHE_TTL){
+      const response=await fetchWithTimeout(TV360_EVENT_KEY_SOURCE,{headers:{'User-Agent':'NM7-TV-Web/1.0.69','Accept':'application/vnd.apple.mpegurl,text/plain,*/*'}},9000);
+      if(!response.ok)throw new Error('event key feed HTTP '+response.status);
+      const text=await response.text(),eventChannels=parseM3U(text,TV360_EVENT_KEY_SOURCE);
+      if(!eventChannels.length)throw new Error('event key feed empty');
+      tv360EventKeyCache={time:now,channels:eventChannels};
+    }
+    const updated=mergeTv360EventKeys(channels,tv360EventKeyCache.channels);
+    return {status:updated?'applied':'no-current-event-match',updated};
+  }catch{return {status:'unavailable',updated:0}}
+}
+
 async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=false){
   if(!SOURCES[source])return new Response(JSON.stringify({channels:[],source}),{status:400,headers:{'Content-Type':'application/json'}});
   const choice=String(defaultChoice||'');
@@ -213,7 +284,7 @@ async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=fa
   const now=Date.now(),hit=playlistCache.get(cacheKey);
   // Manual/explicit sport refresh bypasses the isolate-local cache, while all
   // other sources continue to use the existing 30-second cache.
-  if(!forceRefresh&&hit&&now-hit.time<CACHE_TTL)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,preset,upstream:hit.upstream}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+  if(!forceRefresh&&hit&&now-hit.time<CACHE_TTL)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,preset,upstream:hit.upstream,tv360KeyRefresh:hit.tv360KeyRefresh||null}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   const errors=[];
   const targets=isDefault?(preset===2?[SOURCES.tv[1]]:[SOURCES.tv[0],SOURCES.tv[1]]):SOURCES[source];
   for(const target of targets){try{
@@ -222,10 +293,11 @@ async function playlistResponse(source,defaultChoice='',env=null,forceRefresh=fa
     const r=useBinding
       ?await env.PLAYLIST_SOURCE.fetch(new Request(target,init))
       :await fetchPlaylistTarget(target,init,env,10000);if(!r.ok)throw new Error('HTTP '+r.status);const body=await r.text();let channels=parseM3U(body,target);if(!channels.length){try{const j=JSON.parse(body),arr=Array.isArray(j)?j:(Array.isArray(j.channels)?j.channels:Array.isArray(j.data)?j.data:[]);channels=arr.map(x=>({name:String(x.name||x.title||x.channel||'Kênh'),group:String(x.group||x.groupTitle||x.category||'Khác'),logo:String(x.logo||x.tvgLogo||''),id:String(x.id||x.tvgId||x.name||x.title||''),candidates:Array.isArray(x.candidates)?x.candidates:(x.url||x.stream||x.src?[{url:x.url||x.stream||x.src,ref:x.ref||x.referer||'',ua:x.ua||x.userAgent||'',headers:x.headers||{},type:x.type||'',dash:x.type==='dash',hls:x.type==='hls'}]:[])}))}catch{}}if(!channels.length)throw new Error('playlist rỗng');
+    const tv360KeyRefresh=isDefault?await refreshTv360EventKeys(channels):null;
     enrichChannels(channels);
-    playlistCache.set(cacheKey,{time:now,channels,upstream:target});
-    return new Response(JSON.stringify({channels,source,cached:false,preset:isDefault?preset:undefined,upstream:target,refreshed:forceRefresh}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch(e){errors.push(target+': '+e.message)}}
-  if(hit&&hit.channels?.length)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,stale:true,error:errors.join(' | ')}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+    playlistCache.set(cacheKey,{time:now,channels,upstream:target,tv360KeyRefresh});
+    return new Response(JSON.stringify({channels,source,cached:false,preset:isDefault?preset:undefined,upstream:target,refreshed:forceRefresh,tv360KeyRefresh}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}})}catch(e){errors.push(target+': '+e.message)}}
+  if(hit&&hit.channels?.length)return new Response(JSON.stringify({channels:hit.channels,source,cached:true,stale:true,error:errors.join(' | '),tv360KeyRefresh:hit.tv360KeyRefresh||null}),{headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
   return new Response(JSON.stringify({channels:[],source,error:errors.join(' | ')}),{status:504,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 }
 function sniffPayloadKind(bytes){
@@ -673,6 +745,8 @@ async function probeResponse(request,q){
         contentType:mr.headers.get("content-type")||"",
         server:mr.headers.get("server")||"",
         cfRayPresent:!!mr.headers.get("cf-ray"),
+        accessControlAllowOrigin:mr.headers.get("access-control-allow-origin")||"",
+        accessControlAllowCredentials:mr.headers.get("access-control-allow-credentials")||"",
         redirectPresent:!!location,
         redirectHost:locationHost,
         redirectScheme:redirectUrl?.protocol||"",
@@ -738,7 +812,7 @@ async function probeResponse(request,q){
       return new Response(JSON.stringify({status:0,errorClass:String(e?.name||"Error")} ),{headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Cache-Control":"no-store"}});
     }
   }
-  let r=null,bodyText="",bodyBytes=0,headStatus=0,getStatus=0;
+  let r=null,bodyText="",bodyBytes=0,headStatus=0,getStatus=0,attemptedGet=false;
   try{r=await fetchWithTimeout(target,{method:"HEAD",headers},5000);headStatus=r.status}catch{}
   let finalUrl=r?.url||target,ct=(r?.headers.get("content-type")||"").toLowerCase();
   let type=detectMediaType(finalUrl,ct);
@@ -748,6 +822,7 @@ async function probeResponse(request,q){
     try{
       const getHeaders=new Headers(headers);
       getHeaders.set("Range","bytes=0-2047");
+      attemptedGet=true;
       const gr=await fetchWithTimeout(target,{method:"GET",headers:getHeaders},7000);
       r=gr;getStatus=gr.status;finalUrl=gr.url||target;ct=(gr.headers.get("content-type")||"").toLowerCase();
       const reader=gr.body?.getReader();
@@ -761,7 +836,8 @@ async function probeResponse(request,q){
       if(type==="http")type=detectMediaType(target,ct);
     }
   }
-  const status=r?.status||0;
+  const status=attemptedGet?(getStatus||0):(r?.status||0);
+  const probeSucceeded=attemptedGet?(getStatus>=200&&getStatus<300):!!r?.ok;
   const bodyLower=String(bodyText||"").toLowerCase();
   // Return safe response fingerprints only; never echo upstream body, URLs or credentials.
   const bodyTrim=String(bodyText||"").trimStart();
@@ -788,11 +864,15 @@ async function probeResponse(request,q){
   else if(status>=500)errorHint="upstream-server-error";
   else if(status===0)errorHint="network-or-timeout";
   return new Response(JSON.stringify({
-    type,contentType:ct,status,headStatus,getStatus,errorHint,
+    type:probeSucceeded?type:"http",contentType:ct,status,headStatus,getStatus,errorHint,
     bodyClass,bodyBytes,finalHost,
     serverType:r?.headers.get("server")||"",
     viaPresent:!!r?.headers.get("via"),
     cfRayPresent:!!r?.headers.get("cf-ray"),
+    accessControlAllowOrigin:r?.headers.get("access-control-allow-origin")||"",
+    accessControlAllowCredentials:r?.headers.get("access-control-allow-credentials")||"",
+    acceptRanges:r?.headers.get("accept-ranges")||"",
+    contentRangePresent:!!r?.headers.get("content-range"),
     wwwAuthenticatePresent:!!r?.headers.get("www-authenticate"),
     retryAfter:r?.headers.get("retry-after")||""
   }),{headers:{"Content-Type":"application/json","Cache-Control":"no-store","Access-Control-Allow-Origin":"*"}});
@@ -1456,8 +1536,8 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load4&retryToast=20261019-cleanup1';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-logo-scroll-load4&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
 function noCacheResponseHeaders(sourceHeaders){
@@ -1478,9 +1558,109 @@ async function liveOverlayHtmlResponse(response){
  html=html.replace(/(?:\.\/|\/)?app-safari-policy-(mobile|pc)-controls\.js(?:\?v=[^"'\s>]*)?/g,(_,variant)=>variant==='pc'?LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL:LIVE_PLAYER_OVERLAY_SCRIPT_URL);
  return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
+function patchTv360RuntimeSource(fixed) {
+ const marker="NM7_TV360_RUNTIME_RECOVERY_PATCH_20261022";
+ if(fixed.includes(marker))return fixed;
+ function one(src,from,to,label){const n=src.split(from).length-1;if(n!==1)throw new Error(label+": expected 1 match, got "+n);return src.replace(from,to)}
+ const runtimeAlreadyPatched=
+  fixed.includes("function tv360TransientHttpStatusFromShaka(e){")&&
+  fixed.includes("if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;")&&
+  fixed.includes("var activeChannel=S.current||{};")&&
+  fixed.includes("var upstreamStatus=Number(d&&d.status||0);")&&
+  fixed.includes("if(S.tv360404RetryCount>=5)return false;")&&
+  fixed.includes("Keep Base64URL '-'/'_' intact");
+ if(runtimeAlreadyPatched)return fixed+"\n/*"+marker+"*/\n";
+ const oldCacheSchema="var CACHE_SCHEMA='20261009-vietmitv-defaults-2';";
+ const newCacheSchema="var CACHE_SCHEMA='20261022-tv360-probe-recovery1';";
+ if(fixed.includes(oldCacheSchema))fixed=one(fixed,oldCacheSchema,newCacheSchema,"invalidate stale channel cache");
+ else if(!fixed.includes(newCacheSchema))throw new Error("Unrecognized channel cache schema; refuse to serve stale playlist candidates");
+ const oldGetter="function getCandidate(){return S.current&&S.current.candidates?normalizeCandidate(S.current.candidates[S.candidateIndex]):null}";
+ const safeGetter="function getCandidate(){\n var a=S.current&&Array.isArray(S.current.candidates)?S.current.candidates:[];\n if(!a.length)return null;\n var requested=Number(S.candidateIndex);\n if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;\n for(var offset=0;offset<a.length;offset++){\n  var i=(requested+offset)%a.length,c=a[i],u=String(c&&(c.resolvedUrl||c.url)||'').trim();\n  if(u&&u!=='undefined'&&u!=='null'&&u!=='NaN'){S.candidateIndex=i;return normalizeCandidate(c)}\n }\n return null\n}";
+ if(fixed.includes(oldGetter))fixed=one(fixed,oldGetter,safeGetter,'invalid candidate index guard');
+ else if(!fixed.includes('if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;'))throw new Error('Unrecognized candidate selector; refuse to probe undefined URL');
+ const oldProxyFirst="function shouldProxyFirst(cand,kind){\n cand=normalizeCandidate(cand||{});";
+ const safeProxyFirst="function shouldProxyFirst(cand,kind){\n cand=normalizeCandidate(cand||{});\n // TV360 resolver channels must be Worker-proxied even when their cached\n // candidate lost the forceProxy marker; direct browser requests can stall on CDN redirects.\n if(isTv360ResolverUrl(cand.url||''))return true;\n var activeChannel=S.current||{};\n if(/^TV360\\s*\\+\\s*\\d+$/i.test(String(activeChannel.name||''))&&/tv360/i.test(String(activeChannel.group||'')))return true;";
+ if(!fixed.includes('var activeChannel=S.current||{};'))fixed=one(fixed,oldProxyFirst,safeProxyFirst,'TV360 proxy-first routing');
+ const toHex=String.raw`function toHex16(v){
+ // Keep Base64URL '-'/'_' intact until after the hexadecimal/UUID check.
+ // Removing '-' from Base64URL first corrupts valid 128-bit ClearKey values.
+ var s=String(v==null?'':v).trim().replace(/^[\"']|[\"']$/g,'').replace(/^0x/i,'');
+ var hex=s.replace(/-/g,'');
+ if(/^[0-9a-f]{32}$/i.test(hex))return hex.toLowerCase();
+ try{var b64=s.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';var b=atob(b64),h='';for(var i=0;i<b.length;i++)h+=('0'+b.charCodeAt(i).toString(16)).slice(-2);if(h.length===32)return h.toLowerCase()}catch(e){}
+ return ''
+}`;
+ const classifier=String.raw`function tv360TransientHttpStatusFromShaka(e){
+ function retryableStatus(n){return n===404||n===408||n===429||(n>=500&&n<=599)}
+ var todo=[e&&e.data],seen=0;
+ while(todo.length&&seen++<64){
+  var value=todo.shift();
+  if(value==null)continue;
+  if(typeof value==='number'){if(retryableStatus(value))return value;continue}
+  if(typeof value==='string'){
+   var match=/(?:http|status|response)[^0-9]{0,24}(404|408|429|5\d{2})/i.exec(value);
+   if(match)return Number(match[1]);
+   continue;
+  }
+  if(Array.isArray(value)){
+   for(var i=0;i<value.length;i++)if(value[i]!=null&&(typeof value[i]==='object'||typeof value[i]==='string'||typeof value[i]==='number'))todo.push(value[i]);
+   continue;
+  }
+  if(typeof value!=='object')continue;
+  for(var k of ['status','statusCode','httpStatus','responseCode']){
+   var status=Number(value[k]);if(retryableStatus(status))return status;
+  }
+  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'||typeof value[k]==='number'))todo.push(value[k]);
+ }
+ return 0
+}`;
+ fixed=fixed.replace(/function toHex16\(v\)\{[\s\S]*?\n\}/,match=>{if(!match||!match.includes("replace(/-/g,''"))throw new Error("ClearKey helper mismatch");return toHex});
+ fixed=fixed.replace(/function tv360Http404FromShaka\(e\)\{[\s\S]*?\n\}/,match=>{if(!match||!match.includes("return 404"))throw new Error("Shaka status helper mismatch");return classifier});
+ fixed=one(fixed,"if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka HTTP 404'))return;","var tv360Status=tv360TransientHttpStatusFromShaka(e);if(tv360Status&&retryTv360Resolver(c,cand,gen,'Shaka HTTP '+tv360Status))return;","Shaka fatal status");
+ fixed=one(fixed,"if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP 404'))return;","var tv360LoadStatus=tv360TransientHttpStatusFromShaka(e);if(tv360LoadStatus&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP '+tv360LoadStatus))return;","Shaka load status");
+ const oldGuard=String.raw`  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){nextCandidate('Không xác định được định dạng');return}`;
+ const newGuard=String.raw`  var upstreamStatus=Number(d&&d.status||0);
+  var getStatus=Number(d&&d.getStatus||0);
+  var headStatus=Number(d&&d.headStatus||0);
+  var isTv360=isTv360ResolverUrl(cand.url||'');
+  // A resolver can redirect to an .mpd URL while returning HTTP 404/503.
+  // The final pathname alone is not proof that the manifest is playable.
+  var transientProbeFailure=upstreamStatus===0||upstreamStatus===404||
+   upstreamStatus===408||upstreamStatus===429||upstreamStatus>=500||
+   (getStatus===0&&headStatus>=400);
+  if(isTv360&&transientProbeFailure){
+   var transientReason=upstreamStatus>0?'TV360 resolver HTTP '+upstreamStatus:'TV360 resolver probe mạng/timeout';
+   if(retryTv360Resolver(c,cand,gen,transientReason))return;
+   nextCandidate(transientReason);return;
+  }
+  if(upstreamStatus===0&&(getStatus===0||headStatus>=400)){
+   nextCandidate('Probe upstream mạng/timeout');return;
+  }
+  if(upstreamStatus>=400){
+   nextCandidate((isTv360?'TV360 resolver':'Probe upstream')+' HTTP '+upstreamStatus+' · '+String(d&&d.errorHint||'upstream lỗi'));
+   return;
+  }
+  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){nextCandidate('Không xác định được định dạng');return}`;
+ fixed=one(fixed,oldGuard,newGuard,"probe HTTP guard");
+ const oldCatch=String.raw` }).catch(function(e){if(gen===S.generation&&S.player){dbg('Probe '+(e&&e.message||e));nextCandidate('Probe lỗi')}})
+}`;
+ const newCatch=String.raw` }).catch(function(e){
+  if(gen!==S.generation||!S.player)return;
+  var probeError=String(e&&e.message||e||'request failed').slice(0,100);
+  dbg('Probe '+probeError);
+  if(retryTv360Resolver(c,cand,gen,'Probe request '+probeError))return;
+  nextCandidate('Probe lỗi'+(probeError?' · '+probeError:''));
+ })
+}`;
+ fixed=one(fixed,oldCatch,newCatch,"probe fetch failure");
+ fixed=one(fixed,"if(S.tv360404RetryCount>=2)return false;","if(S.tv360404RetryCount>=5)return false;","TV360 bounded retry ceiling");
+ fixed=one(fixed,"if(httpStatus===404&&retryTv360Resolver(c,cand,gen,'HLS HTTP 404'))return;","if((httpStatus===404||httpStatus===408||httpStatus===429||httpStatus>=500)&&retryTv360Resolver(c,cand,gen,'HLS HTTP '+httpStatus))return;","HLS HTTP failure");
+ return fixed+"\n/*"+marker+"*/\n";
+}
 async function liveOverlayScriptResponse(response){
  if(!response||!response.ok)return response;
  let fixed=await response.text();
+ try{fixed=patchTv360RuntimeSource(fixed)}catch(e){return new Response('TV360 runtime patch failed: '+String(e&&e.message||e),{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}})}
  const liveClassMarker="S.livePlaybackContext?'live-playback':''";
  if(!fixed.includes(liveClassMarker)){
   if(!LIVE_PLAYER_INIT_RE.test(fixed))return new Response('LIVE overlay promotion failed: could not locate the tested player initialization.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});

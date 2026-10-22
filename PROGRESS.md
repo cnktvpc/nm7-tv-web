@@ -1,3 +1,46 @@
+## 2026-10-22 — Tiếp tục sửa TV360+15
+
+- Đã sửa dòng newline escape còn sót trong runtime legacy `web-tv/app-safari-policy.js` theo assertion startup regression: [commit 5b6ec21](https://github.com/cnktvpc/nm7-tv-web/commit/5b6ec21af380cffec36f5877dae943d516b5fded).
+- Chạy lại CI sau commit này để xác minh lỗi startup regression đã hết; chỉ deploy khi toàn bộ required checks đạt.
+- Bằng chứng metadata đã kiểm tra: nguồn sự kiện có mục TV360+15 với KID khớp KID MPD production. Chưa coi đây là xác nhận KEY giải mã được; cần kiểm thử playback thực tế.
+- Production chưa được deploy thay đổi mới. Giữ nguyên URL playlist mặc định và không sửa NM7 TV Android/Mobile.
+
+---
+
+## 2026-10-22 — Follow-up kiểm tra TV360+15 sau yêu cầu tiếp tục
+
+- Kiểm tra trực tiếp qua trình duyệt Cloudflare Browser Rendering: `/api/playlist?source=tv&default=1` trả HTTP 200, có 319 kênh; TV360+15 có đúng 1 candidate resolver `vmttv.dpdns.org/tv360/?id=tv360-15`, có metadata ClearKey.
+- Manifest production lấy qua Worker trả MPD HTTP 200 (13,143 bytes) ở các lần thành công; các lần gọi khác vẫn trả HTTP 404. Trong 3 lần MPD thành công liên tiếp, `default_KID` đều là `fa403384-1a70-511c-84a7-fe7e0daf1a6a`.
+- Đã đối chiếu ID khóa của candidate TV360+15 với KID của MPD: **không khớp**. Kiểm tra thêm ba nguồn playlist đang cấu hình (`vuminhthanh12/vmttv`, `phuongnm7-playlist`, `iptv-live-merge`) cũng không tìm thấy metadata TV360 có KID trùng với manifest hiện tại. Không ghi hoặc xuất giá trị KEY ra log.
+- Đây là lỗi metadata DRM/ánh xạ nguồn cần giải quyết; việc đổi proxy hoặc retry không thể tự tạo ra khóa đúng. Không thay đổi key/playlist hoặc sửa NM7 TV Android/Mobile. Chưa xác nhận playback Web hoàn chỉnh.
+- GitHub Actions đã được yêu cầu rerun nhưng 3 workflow liên quan tiếp tục báo failure; API jobs không trả steps/log, nên chưa có bằng chứng lỗi test cụ thể. Không deploy thêm và không merge PR #24 khi kiểm thử chưa đạt.
+
+## 2026-10-22 — TV360+15: DASH segment proxy đã sửa; DRM KID mismatch còn chặn playback
+
+- Production Worker **version 508** đã được cập nhật trực tiếp trên Cloudflare. Deployment ID: `eb7ccc0f-3830-4108-8665-8cef9982733f`. Đã xác minh các binding hiện hữu vẫn còn: `ASSETS`, `PLAYLIST_SOURCE → phuongnm7-playlist`, `THETHAO_SOURCE → thethaonm7`.
+- Lỗi DASH đã tái hiện được: các URI tương đối kiểu `../_shared/...` nằm dưới BaseURL proxy đã bị trình duyệt chuẩn hoá mất token ngữ cảnh; Worker trả HTTP 400 `bad dash context`. Worker nay resolve URI từ BaseURL upstream gốc rồi rewrite từng URI thành proxy URL có context riêng.
+- Production smoke sau deploy: manifest MPD trả HTTP 200; DASH initialization segments và media segments được kiểm tra trả HTTP 200 với MIME `video/mp4`. Đây là xác nhận proxy segment, **không phải** xác nhận phát hình/tiếng hoàn chỉnh.
+- Thử mở thẻ TV360+15 trên giao diện production vẫn hết timeout 15 giây. Debug Shaka phát hiện mã 4012 có `missingKeys`; KID nguồn trong playlist không khớp KID trong MPD hiện trả về. Resolver có tính bất định giữa các node (ở các lần thăm dò gần nhau, có lúc 404 và có lúc trả DASH 206).
+- Test hồi quy mới thêm cho rewrite các URL DASH tương đối `../_shared` và xác nhận URL proxy luôn giữ context token: `scripts/test-tv360-playback-routing.js`.
+- **Trạng thái:** chưa hoàn tất playback. Việc tiếp theo là đối chiếu nguồn metadata ClearKey có thẩm quyền với KID của manifest TV360+15 và xác nhận rằng cùng bộ metadata phát được ở Web. Không thay đổi NM7 TV Android/Mobile, playlist URL hay khóa DRM đang lưu; không tuyên bố PASS cho end-to-end.
+
+---
+
+## 2026-10-22 — TV360 resolver probe recovery (đang kiểm thử nhánh riêng)
+
+- **Tái hiện lỗi production:** probe qua Worker trả HTTP 404 với một số resolver TV360, HTTP 503 ở một resolver khác, trong khi một resolver khác trả nội dung DASH. Một số phản hồi có URL cuối trông như `.mpd` dù response thất bại; vì vậy chỉ kiểm tra kiểu URL là không đủ để xác nhận manifest.
+- **Nguyên nhân mã nguồn:** Worker `/api/probe` từng trả `type` suy ra từ URL cuối mà không buộc phản hồi HTTP phải thành công. Runtime `probeCandidate()` tin `type` trước khi kiểm tra status, khiến Shaka có thể được khởi tạo với resolver đang lỗi. Ngoài ra, lỗi gọi probe bị chuyển thành thông báo chung `Probe lỗi`.
+- **Bản sửa trong nhánh `fix/tv360-probe-http-recovery-20261022`:** `/api/probe` dùng status của GET Range khi đã thực hiện và trả `type: http` nếu phản hồi upstream thất bại. Bốn runtime Web kiểm tra status trước khi tin `type`; các lỗi TV360 tạm thời 0/404/408/429/5xx hoặc lỗi gọi probe sẽ dùng retry có giới hạn hai lần. Hết retry thì chuyển nguồn với lý do cụ thể, không coi response hỏng là DASH.
+- **Chẩn đoán Shaka:** bắt giữ thông báo exception thực tế khi khởi tạo; với Shaka 4012 chỉ ghi số lượng `missingKeys`/`restrictedKeyStatuses` vào debug, không ghi nội dung khóa ClearKey. Theo tài liệu Shaka, mã 4012 là `RESTRICTIONS_CANNOT_BE_MET`, có thể liên quan key ID không khớp/thiếu key hoặc giới hạn của key system — không đơn thuần là lỗi mạng.
+- **ClearKey Base64URL fix:** `toHex16()` trước đây xóa `-` trước khi giải mã Base64URL, làm hỏng KID/KEY 128-bit hợp lệ dùng dấu `-`/`_`. Hàm nay kiểm tra chuỗi hexadecimal/UUID sau khi loại dấu phân cách riêng, nhưng giữ nguyên chuỗi gốc cho nhánh Base64URL. Regression test chạy hàm thật với fixture có ký tự Base64URL và UUID có dấu gạch.
+- **Cache và regression:** đồng bộ cache key HTML/Worker thành `20261022-tv360-probe-recovery1`; bổ sung assertion vào `scripts/test-tv360-playback-routing.js` cho status-before-type, HTTP failure mapping và retry.
+- **Phạm vi:** chỉ NM7 TV Web/Cloudflare; không sửa NM7 TV Android hoặc NM7 Mobile, không đổi URL nguồn, thứ tự nhóm/kênh hoặc dữ liệu khóa đã có.
+- **Trạng thái:** thay đổi đã được ghi vào nhánh riêng. Chưa đánh dấu PASS cho regression, deploy hoặc phát hình/tiếng thiết bị thật cho đến khi các kiểm tra tiếp theo xác nhận. Nguồn upstream TV360 vẫn có thể trả 404/503; mã sửa chỉ retry giới hạn và báo lỗi thật nếu nguồn tiếp tục hỏng.
+
+Production: https://phuongnm7.app/
+
+---
+
 ## 2026-10-22 — Xác minh cuối bản sửa logo production
 
 - Mã sửa URL runtime và phạm vi bản vá logo đã được commit trên nhánh `main`: [`a93a93c`](https://github.com/cnktvpc/nm7-tv-web/commit/a93a93ca6d9d8efb9967cdf5620da22898f23e5a).
@@ -1130,3 +1173,11 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 - Production deployment: Worker `nm7-tv-web`, deployment `b42df3e0-0d2f-4fb1-9ef4-8f99a6252ae1`, version `93b106c6-9dbc-4e34-94f7-888b5984fec7`, 100% traffic. `ASSETS`, playlist, and sports source bindings unchanged.
 - Regression workflow PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084780733. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084788415.
 - The production Worker update is complete. User should hard refresh once; if the title remains, capture the served title after refreshing so the DOM state can be identified further.
+
+
+## 2026-10-22 — TV360 live-event ClearKey overlay candidate (not released)
+
+- Added `mergeTv360EventKeys()` / `refreshTv360EventKeys()` on branch `fix/tv360-probe-http-recovery-20261022`. It fetches the current event feed with a bounded timeout and 45-second isolate cache, validates 128-bit ClearKey pairs, matches TV360 channel numbers, and overlays metadata only onto the existing TV360 resolver candidate in the default TV playlist.
+- The patch does not change the playlist URL, channel order, resolver URL, proxy-first flag, per-channel User-Agent, or any non-TV360 DRM channel. It does not synthesize keys. Feed errors or invalid/unmatched metadata leave existing candidates unchanged.
+- Added fixture regression `scripts/test-tv360-live-key-overlay.js` and included it in `.github/workflows/test-tv360-playback-routing.yml`.
+- **Not deployed / not verified end-to-end:** CI run status is not yet confirmed; production Worker still needs safe deployment with existing bindings preserved; actual TV360+15 video/audio playback remains unconfirmed. Do not treat this candidate as released until those checks pass.

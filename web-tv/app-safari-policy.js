@@ -92,7 +92,7 @@ function clearToast(){var t=$('toast');if(toastTimer!==null){clearTimeout(toastT
 function isHttp(u){return /^https?:\/\//i.test(String(u||''))}
 function saveUser(){try{localStorage.setItem('nm7:fav',JSON.stringify(S.fav));localStorage.setItem('nm7:recent',JSON.stringify(S.recent.slice(0,80)))}catch(e){}}
 function restoreUser(){try{S.fav=JSON.parse(localStorage.getItem('nm7:fav')||'[]');S.recent=JSON.parse(localStorage.getItem('nm7:recent')||'[]')}catch(e){S.fav=[];S.recent=[]}}
-var CACHE_SCHEMA='20261009-vietmitv-defaults-2';
+var CACHE_SCHEMA='20261022-tv360-probe-recovery1';
 function cacheKey(){return 'nm7:web:'+CACHE_SCHEMA+':'+S.source+(S.source==='tv'?':default-'+(S.tvPreset===2?2:1):'')}
 function readCache(){try{var x=JSON.parse(localStorage.getItem(cacheKey())||'null');if(!x||x.schema!==CACHE_SCHEMA||!Array.isArray(x.channels)||!x.channels.length)return null;return x}catch(e){return null}}
 function isAndroid1069DefaultList(channels){
@@ -747,6 +747,12 @@ function startupCandidateIndex(c){
 
 function shouldProxyFirst(cand,kind){
  cand=normalizeCandidate(cand||{});
+ // The web runtime must proxy TV360 resolver sources even if the cached or
+ // parsed candidate lost its forceProxy flag; the resolver can redirect to a
+ // CDN response that rejects direct browser playback.
+ if(isTv360ResolverUrl(cand.url||''))return true;
+ var activeChannel=S.current||{};
+ if(/^TV360\\s*\\+\\s*\\d+$/i.test(String(activeChannel.name||''))&&/tv360/i.test(String(activeChannel.group||'')))return true;
  // Production diagnostics confirmed the SCTV4K upstream manifest is HTTP 200,
  // but its child TS segments return HTTP 400 directly and HTTP 200 via Worker.
  // Start this known source through the proxy instead of wasting a direct attempt.
@@ -828,8 +834,11 @@ function parseClearKey(text){
  return Object.keys(map).length?map:null
 }
 function toHex16(v){
- var s=String(v==null?'':v).trim().replace(/^["']|["']$/g,'').replace(/-/g,'').replace(/^0x/i,'');
- if(/^[0-9a-f]{32}$/i.test(s))return s.toLowerCase();
+ // Keep Base64URL '-'/'_' intact until after the hexadecimal/UUID check.
+ // Removing '-' from Base64URL first corrupts valid 128-bit ClearKey values.
+ var s=String(v==null?'':v).trim().replace(/^["']|["']$/g,'').replace(/^0x/i,'');
+ var hex=s.replace(/-/g,'');
+ if(/^[0-9a-f]{32}$/i.test(hex))return hex.toLowerCase();
  try{var b64=s.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';var b=atob(b64),h='';for(var i=0;i<b.length;i++)h+=('0'+b.charCodeAt(i).toString(16)).slice(-2);if(h.length===32)return h.toLowerCase()}catch(e){}
  return ''
 }
@@ -853,7 +862,17 @@ function clearPlayers(){
 }
 function setStatus(s,show){$('status').textContent=s||'';$('status').style.display=show===false?'none':'flex'}
 function hideStatus(){$('status').style.display='none'}
-function getCandidate(){return S.current&&S.current.candidates?normalizeCandidate(S.current.candidates[S.candidateIndex]):null}
+function getCandidate(){
+ var a=S.current&&Array.isArray(S.current.candidates)?S.current.candidates:[];
+ if(!a.length)return null;
+ var requested=Number(S.candidateIndex);
+ if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;
+ for(var offset=0;offset<a.length;offset++){
+  var i=(requested+offset)%a.length,c=a[i],u=String(c&&(c.resolvedUrl||c.url)||'').trim();
+  if(u&&u!=='undefined'&&u!=='null'&&u!=='NaN'){S.candidateIndex=i;return normalizeCandidate(c)}
+ }
+ return null
+}
 
 function openPlayer(c){
  var sourceId=String(c&&c.id||'').toLowerCase().replace(/[\\s_-]+/g,'');
@@ -897,22 +916,27 @@ function isStalkerTsCandidate(cand,kind){
   return u.pathname.toLowerCase().endsWith('/play/live.php')&&q.has('mac')&&q.has('stream')&&q.has('extension')&&(q.has('play_token')||q.has('token'));
  }catch(e){return false}
 }
-function tv360Http404FromShaka(e){
+function tv360TransientHttpStatusFromShaka(e){
+ function retryableStatus(n){return n===404||n===408||n===429||(n>=500&&n<=599)}
  var todo=[e&&e.data],seen=0;
  while(todo.length&&seen++<64){
   var value=todo.shift();
-  if(!value)continue;
+  if(value==null)continue;
+  if(typeof value==='number'){if(retryableStatus(value))return value;continue}
   if(typeof value==='string'){
-   if(/(?:http|status|response)[^0-9]{0,24}404/i.test(value))return 404;
+   var match=/(?:http|status|response)[^0-9]{0,24}(404|408|429|5\d{2})/i.exec(value);
+   if(match)return Number(match[1]);
    continue;
   }
   if(Array.isArray(value)){
-   for(var i=0;i<value.length;i++)if(value[i]&&(typeof value[i]==='object'||typeof value[i]==='string'))todo.push(value[i]);
+   for(var i=0;i<value.length;i++)if(value[i]!=null&&(typeof value[i]==='object'||typeof value[i]==='string'||typeof value[i]==='number'))todo.push(value[i]);
    continue;
   }
   if(typeof value!=='object')continue;
-  for(var k of ['status','statusCode','httpStatus','responseCode'])if(Number(value[k])===404)return 404;
-  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'))todo.push(value[k]);
+  for(var k of ['status','statusCode','httpStatus','responseCode']){
+   var status=Number(value[k]);if(retryableStatus(status))return status;
+  }
+  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'||typeof value[k]==='number'))todo.push(value[k]);
  }
  return 0
 }
@@ -921,7 +945,7 @@ function retryTv360Resolver(c,cand,gen,reason){
  if(S.retryPending)return true;
  var key=String(c.id||c.name||'')+'|'+String(cand.url||'');
  if(S.tv360404RetryKey!==key){S.tv360404RetryKey=key;S.tv360404RetryCount=0}
- if(S.tv360404RetryCount>=2)return false;
+ if(S.tv360404RetryCount>=5)return false;
  S.tv360404RetryCount++;
  var attempt=S.tv360404RetryCount;
  if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}
@@ -1024,7 +1048,30 @@ function probeCandidate(c,cand,gen){
  if(cand.headers&&Object.keys(cand.headers).length)u+='&h='+encodeURIComponent(JSON.stringify(cand.headers));
  fetch(u,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(d){
   if(gen!==S.generation||!S.player)return;
-  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){nextCandidate('Không xác định được định dạng');return}
+  var upstreamStatus=Number(d&&d.status||0);
+  var getStatus=Number(d&&d.getStatus||0);
+  var headStatus=Number(d&&d.headStatus||0);
+  var isTv360=isTv360ResolverUrl(cand.url||'');
+  // A resolver may redirect to an .mpd URL even when its actual response is
+  // 404/503. Do not infer a valid DASH stream from the redirected path alone.
+  var transientProbeFailure=upstreamStatus===0||upstreamStatus===404||
+   upstreamStatus===408||upstreamStatus===429||upstreamStatus>=500||
+   (getStatus===0&&headStatus>=400);
+  if(isTv360&&transientProbeFailure){
+   var transientReason=upstreamStatus>0?'TV360 resolver HTTP '+upstreamStatus:'TV360 resolver probe mạng/timeout';
+   if(retryTv360Resolver(c,cand,gen,transientReason))return;
+   nextCandidate(transientReason);return;
+  }
+  if(upstreamStatus===0&&(getStatus===0||headStatus>=400)){
+   nextCandidate('Probe upstream mạng/timeout');return;
+  }
+  if(upstreamStatus>=400){
+   nextCandidate((isTv360?'TV360 resolver':'Probe upstream')+' HTTP '+upstreamStatus+' · '+String(d&&d.errorHint||'upstream lỗi'));
+   return;
+  }
+  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){
+   nextCandidate('Không xác định được định dạng');return
+  }
   cand.type=d.type;
   cand.mime=d.contentType||cand.mime||'';
   cand.resolvedUrl=d.resolvedUrl||d.finalUrl||cand.url;
@@ -1038,7 +1085,13 @@ function probeCandidate(c,cand,gen){
   clearPlayers();
   setStatus('Đang phát '+c.name+'\nNguồn '+(S.candidateIndex+1)+'/'+c.candidates.length+(S.proxyAttempt?' · proxy':''));
   startByType(c,cand,url,d.type,gen);
- }).catch(function(e){if(gen===S.generation&&S.player){dbg('Probe '+(e&&e.message||e));nextCandidate('Probe lỗi')}})
+ }).catch(function(e){
+  if(gen!==S.generation||!S.player)return;
+  var probeError=String(e&&e.message||e||'request failed').slice(0,100);
+  dbg('Probe '+probeError);
+  if(retryTv360Resolver(c,cand,gen,'Probe request '+probeError))return;
+  nextCandidate('Probe lỗi'+(probeError?' · '+probeError:''));
+ })
 }
 function markPlaying(gen){if(gen!==S.generation||!S.player)return;if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}clearToast();hideStatus()}
 function startDirect(c,cand,url,gen){
@@ -1105,7 +1158,7 @@ function tryHlsJs(c,cand,url,gen){
    // Do not wait for HLS.js retry backoff when an upstream explicitly rejects
    // the manifest/segment. Switch direct <-> proxy immediately on HTTP 4xx/5xx.
    if(httpStatus>=400&&httpStatus<=599){
-    if(httpStatus===404&&retryTv360Resolver(c,cand,gen,'HLS HTTP 404'))return;
+    if((httpStatus===404||httpStatus===408||httpStatus===429||httpStatus>=500)&&retryTv360Resolver(c,cand,gen,'HLS HTTP '+httpStatus))return;
     nextCandidate('HLS HTTP '+httpStatus+' · '+(S.proxyAttempt?'proxy lỗi':'nguồn trực tiếp lỗi'));
     return;
    }
@@ -1418,6 +1471,12 @@ function startShaka(c,cand,url,drm,gen){
    if(gen!==S.generation||S.shaka!==p||!ev||!ev.detail)return;
    var e=ev.detail,code=e.code||'',cat=e.category||'';
    dbg('Shaka '+code+' cat='+cat+' data='+(e.data?JSON.stringify(e.data):'')+' '+(e.message||''));
+   if(Number(code)===4012){
+    var restrictionData=Array.isArray(e.data)?e.data[0]:null;
+    var missingKeyCount=restrictionData&&Array.isArray(restrictionData.missingKeys)?restrictionData.missingKeys.length:0;
+    var keyStatusCount=restrictionData&&Array.isArray(restrictionData.restrictedKeyStatuses)?restrictionData.restrictedKeyStatuses.length:0;
+    dbg('Shaka 4012 restriction diagnostic: missingKeys='+missingKeyCount+' restrictedKeyStatuses='+keyStatusCount);
+   }
    if(appleDrm){
     if(transientDrmError(e)){
      // Let Shaka's built-in MediaSource recovery handle transient iOS MSE errors.
@@ -1438,7 +1497,8 @@ function startShaka(c,cand,url,drm,gen){
     setStatus('DRM lỗi '+code+'\n'+c.name);
     return;
    }
-   if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka HTTP 404'))return;
+   var tv360Status=tv360TransientHttpStatusFromShaka(e);
+   if(tv360Status&&retryTv360Resolver(c,cand,gen,'Shaka HTTP '+tv360Status))return;
    nextCandidate('DASH/DRM lỗi '+code);
   });
 
@@ -1448,7 +1508,8 @@ function startShaka(c,cand,url,drm,gen){
   }).catch(function(e){
    if(gen!==S.generation)return;
    dbg('Shaka load '+(e.code||'')+' cat='+(e.category||'')+' '+(e.message||''));
-   if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP 404'))return;
+   var tv360LoadStatus=tv360TransientHttpStatusFromShaka(e);
+   if(tv360LoadStatus&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP '+tv360LoadStatus))return;
    if(appleDrm){
     if(transientDrmError(e)&&retryDrmInPlace(c,cand,url,p,gen,e))return;
     if(hardRestartDrm(c,cand,gen,'load failure '+(e.code||'')))return;
@@ -1520,11 +1581,13 @@ function startShaka(c,cand,url,drm,gen){
   if(appleDrm)armDrmStallWatch('startup');
 
  }catch(e){
+  var initError=String(e&&e.message||e||'unknown').slice(0,120);
+  dbg('Shaka init exception '+initError);
   if(isAppleTouchDevice()&&isDashDrmCandidate(cand)){
-   hardRestartDrm(c,cand,gen,'Shaka init '+String(e&&e.message||e));
+   hardRestartDrm(c,cand,gen,'Shaka init '+initError);
    return;
   }
-  nextCandidate('Shaka khởi tạo lỗi');
+  nextCandidate('Shaka khởi tạo lỗi · '+initError);
  }
 }
 
