@@ -147,3 +147,50 @@ jobs:
                 'kidMatch=' + str(bool(key_kids & mpd_kids)).lower())
           PY
           done
+
+
+      - name: Probe the paired event-feed media candidates
+        shell: bash
+        run: |
+          set -u
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          for item in '13 10022 856f291af35a5db7b7d0c944b32993b9' '15 10024 fa4033841a70511c84a7fe7e0daf1a6a'; do
+            read -r display channel expected_kid <<< "$item"
+            UPSTREAM="https://dekki.bacbenny95.workers.dev/film4k/stream/channel/$channel"
+            echo "EVENT_FEED_CANDIDATE tv360=$display channel_id=$channel"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 1 -sS --max-time 25 -A 'Dalvik/2.1.0' -o "/tmp/event-direct-$channel.mpd" -w '%{http_code}' "$UPSTREAM" || true)"
+            python3 - "$display" "$expected_kid" "$code" "/tmp/event-direct-$channel.mpd" <<'PY'
+          import re,sys,xml.etree.ElementTree as ET
+          display,expected,status,path=sys.argv[1:]
+          try:
+              root=ET.parse(path).getroot()
+              kidset=set()
+              for e in root.iter():
+                  value=e.attrib.get('{urn:mpeg:cenc:2013}default_KID','').replace('-','').lower()
+                  if re.fullmatch(r'[0-9a-f]{32}',value): kidset.add(value)
+              print('EVENT_DIRECT_MANIFEST tv360='+display,'http='+status,
+                    'mpdKids='+(','.join(sorted(kidset)) or 'none'),
+                    'expectedKidMatch='+str(expected.lower() in kidset).lower())
+          except Exception as e:
+              print('EVENT_DIRECT_MANIFEST tv360='+display,'http='+status,
+                    'kind=unparseable','error='+type(e).__name__)
+          PY
+            ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$UPSTREAM")"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 1 -sS --max-time 30 -A 'Dalvik/2.1.0' -o "/tmp/event-proxy-$channel.mpd" -w '%{http_code}' "$BASE/api/stream?u=$ENC&ua=Dalvik%2F2.1.0" || true)"
+            python3 - "$display" "$expected_kid" "$code" "/tmp/event-proxy-$channel.mpd" <<'PY'
+          import re,sys,xml.etree.ElementTree as ET
+          display,expected,status,path=sys.argv[1:]
+          try:
+              root=ET.parse(path).getroot()
+              kidset=set()
+              for e in root.iter():
+                  value=e.attrib.get('{urn:mpeg:cenc:2013}default_KID','').replace('-','').lower()
+                  if re.fullmatch(r'[0-9a-f]{32}',value): kidset.add(value)
+              print('EVENT_PROXY_MANIFEST tv360='+display,'http='+status,
+                    'mpdKids='+(','.join(sorted(kidset)) or 'none'),
+                    'expectedKidMatch='+str(expected.lower() in kidset).lower())
+          except Exception as e:
+              print('EVENT_PROXY_MANIFEST tv360='+display,'http='+status,
+                    'kind=unparseable','error='+type(e).__name__)
+          PY
+          done
