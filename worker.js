@@ -223,23 +223,23 @@ function normalizeClearKeyKid(value){
 }
 function clearKeyKidIds(value){
   const out=new Set(),text=String(value||'').trim();
-  const add=(kid)=>{const normalized=normalizeClearKeyKid(kid);if(normalized)out.add(normalized)};
+  const add=(kid,key)=>{const normalized=normalizeClearKeyKid(kid),validKey=normalizeClearKeyKid(key);if(normalized&&validKey)out.add(normalized)};
   if(text.startsWith('{')){
     try{
       const data=JSON.parse(text);
       if(Array.isArray(data.keys)){
-        for(const item of data.keys)if(item)add(item.kid||item.keyId);
+        for(const item of data.keys)if(item)add(item.kid||item.keyId,item.k||item.key||item.value);
       }else if(data.keys&&typeof data.keys==='object'){
-        for(const kid of Object.keys(data.keys))add(kid);
+        for(const kid of Object.keys(data.keys))add(kid,data.keys[kid]);
       }
-      if(data.kid)add(data.kid);
+      if(data.kid&&(data.k||data.key))add(data.kid,data.k||data.key);
     }catch{}
   }else{
     for(const part of text.split(/[;,\s]+/)){
       const index=part.indexOf(':');
-      if(index>0&&part.indexOf(':',index+1)<0)add(part.slice(0,index));
+      if(index>0&&part.indexOf(':',index+1)<0)add(part.slice(0,index),part.slice(index+1));
       const match=/\bkid\s*=\s*([^&;,\s]+)/i.exec(part);
-      if(match)add(match[1]);
+      if(match){const keyMatch=/\bkey\s*=\s*([^&;,\s]+)/i.exec(text);if(keyMatch)add(match[1],keyMatch[1])}
     }
   }
   return out;
