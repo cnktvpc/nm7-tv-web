@@ -30,7 +30,7 @@ for (const file of runtimeFiles) {
     file + ': candidate must preserve proxy-first metadata');
   assert.match(source, /if\(cand\.forceProxy===true\)return true/,
     file + ': resolver candidates must use the proxy on the first playback attempt');
-  assert.match(source, /var workerDashResource=uri\.indexOf\(location\.origin\+'\\/api\\/dash-resource\\/'\)===0/,
+  assert.ok(source.includes("var workerDashResource=uri.indexOf(location.origin+'/api/dash-resource/')===0"),
     file + ': already-rewritten DASH resources must be recognized as Worker-managed');
   assert.match(source, /&&!workerDashResource/,
     file + ': do not double-wrap Worker DASH resource URLs in another /api/stream request');
