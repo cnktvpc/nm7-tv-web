@@ -27,7 +27,7 @@ const mergeEnd = worker.indexOf('\nasync function refreshTv360EventKeys(channels
 assert.ok(mergeStart >= 0 && mergeEnd > mergeStart, 'Worker must pair TV360 event channels with their own stream');
 const mergeTv360EventKeys = vm.runInNewContext('(' + worker.slice(mergeStart, mergeEnd).trim() + ')', {
   URL,
-  isHttp: value => /^https?:\\/\\//i.test(String(value || ''))
+  isHttp: value => String(value || '').startsWith('http://') || String(value || '').startsWith('https://')
 });
 const fixtureResolverKey = '00112233445566778899aabbccddeeff:ffeeddccbbaa99887766554433221100';
 const fixtureEventKey = '856f291af35a5db7b7d0c944b32993b9:aa3547547f084fe4c9ea5206effb6b78';
