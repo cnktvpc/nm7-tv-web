@@ -107,7 +107,7 @@ const dashHelpersEnd = worker.indexOf('async function dashResourceResponse(', da
 assert.ok(safeUrlStart >= 0 && safeUrlEnd > safeUrlStart && dashHelpersStart >= 0 && dashHelpersEnd > dashHelpersStart,
   'Worker must expose safe URL and DASH proxy helpers for regression testing');
 const dashHarness = vm.runInNewContext(
-  '(function(){' + worker.slice(safeUrlStart, safeUrlEnd) + '\\n' +
+  '(function(){' + worker.slice(safeUrlStart, safeUrlEnd) + '\n' +
   worker.slice(dashHelpersStart, dashHelpersEnd) +
   '\\nreturn {rewriteDash:rewriteDash,decodeDashContext:decodeDashContext};})()',
   {
