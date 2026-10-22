@@ -1487,6 +1487,46 @@ async function liveOverlayScriptResponse(response){
   fixed=fixed.replace(LIVE_PLAYER_INIT_RE,LIVE_PLAYER_INIT_REPLACEMENT);
  }
  if(!fixed.includes(liveClassMarker))return new Response('LIVE overlay promotion failed: tested LIVE class marker missing.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+ const logoScrollPatch=`
+;/*NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH*/
+var logoActivationScheduled=false,logoScrollActivationBound=false,logoResizeActivationBound=false;
+function scheduleLogoActivation(){
+ if(logoActivationScheduled)return;
+ logoActivationScheduled=true;
+ var run=function(){logoActivationScheduled=false;activateLogos()};
+ if(typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(run);
+ else setTimeout(run,16);
+}
+function bindLogoActivationEvents(){
+ var rows=$('homeRows');
+ if(rows&&!logoScrollActivationBound&&rows.addEventListener){
+  rows.addEventListener('scroll',scheduleLogoActivation,{passive:true});
+  logoScrollActivationBound=true;
+ }
+ if(!logoResizeActivationBound&&window.addEventListener){
+  window.addEventListener('resize',scheduleLogoActivation,{passive:true});
+  logoResizeActivationBound=true;
+ }
+}
+function activateLogos(){
+ bindLogoActivationEvents();
+ var imgs=document.querySelectorAll('img[data-src]');
+ var rows=$('homeRows');
+ var bounds=rows&&rows.getBoundingClientRect?rows.getBoundingClientRect():{top:0,bottom:window.innerHeight||768,left:0,right:window.innerWidth||1024};
+ var height=Math.max(1,Number(bounds.bottom)-Number(bounds.top)||600);
+ var margin=Math.max(320,Math.round(height*.75));
+ for(var i=0;i<imgs.length;i++){
+  var img=imgs[i],r=Number(img.dataset.row||0),nearViewport=false;
+  if(img.getBoundingClientRect){
+   var box=img.getBoundingClientRect();
+   nearViewport=Number(box.bottom)>=Number(bounds.top)-margin&&Number(box.top)<=Number(bounds.bottom)+margin&&Number(box.right)>=Number(bounds.left)&&Number(box.left)<=Number(bounds.right);
+  }
+  if(nearViewport||Math.abs(r-S.row)<=2){img.src=img.dataset.src;img.removeAttribute('data-src')}
+ }
+}
+try{bindLogoActivationEvents();activateLogos()}catch(e){}
+`;
+ if(!fixed.includes('NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH'))fixed+='\\n'+logoScrollPatch;
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
