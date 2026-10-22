@@ -22,6 +22,48 @@ assert.match(worker, /h\.set\('User-Agent',q\.get\('ua'\)\|\|fallbackUA\)/,
 assert.ok(worker.includes('newCacheSchema') && worker.includes('safeGetter') && worker.includes('safeProxyFirst'),
   'Worker runtime patch must invalidate stale cache and guard/route TV360 candidates');
 
+const mergeStart = worker.indexOf('function mergeTv360EventKeys(channels,eventChannels){');
+const mergeEnd = worker.indexOf('\nasync function refreshTv360EventKeys(channels){', mergeStart);
+assert.ok(mergeStart >= 0 && mergeEnd > mergeStart, 'Worker must pair TV360 event channels with their own stream');
+const mergeTv360EventKeys = vm.runInNewContext('(' + worker.slice(mergeStart, mergeEnd).trim() + ')', {
+  URL,
+  isHttp: value => /^https?:\\/\\//i.test(String(value || ''))
+});
+const fixtureResolverKey = '00112233445566778899aabbccddeeff:ffeeddccbbaa99887766554433221100';
+const fixtureEventKey = '856f291af35a5db7b7d0c944b32993b9:aa3547547f084fe4c9ea5206effb6b78';
+const resolverFixture = {
+  name: 'TV360+13', group: 'Sự Kiện TV360',
+  candidates: [{
+    url: 'https://vmttv.dpdns.org/tv360/?id=tv360-13',
+    type: 'dash', dash: true, forceProxy: true,
+    drm: {type:'clearkey',key:fixtureResolverKey}
+  }]
+};
+const eventFixture = {
+  name: 'Golf event, Kênh TV360+ 13', group: 'Sự Kiện TV360',
+  candidates: [{
+    url: 'https://dekki.bacbenny95.workers.dev/film4k/stream/channel/10022',
+    type: 'dash', dash: true,
+    drm: {type:'clearkey',key:fixtureEventKey}
+  }]
+};
+const mergedCount = mergeTv360EventKeys([resolverFixture],[eventFixture]);
+assert.equal(mergedCount, 1, 'A matching TV360 event must add its event-specific media candidate');
+assert.equal(resolverFixture.candidates[0].url, eventFixture.candidates[0].url,
+  'Event-specific URL must be tried before the independently mapped resolver');
+assert.equal(resolverFixture.candidates[0].tv360EventFeed, true,
+  'Event media candidate must carry an explicit priority marker');
+assert.equal(resolverFixture.candidates[0].forceProxy, true,
+  'Event media candidate must use the Worker proxy');
+assert.equal(resolverFixture.candidates[0].drm.key, fixtureEventKey,
+  'Event media candidate must retain the ClearKey pair from the same M3U entry');
+assert.equal(resolverFixture.candidates[1].url, 'https://vmttv.dpdns.org/tv360/?id=tv360-13',
+  'The original resolver must remain as a fallback');
+assert.equal(resolverFixture.candidates[1].drm.key, fixtureResolverKey,
+  'Event key must not be copied onto a resolver that can return another KID');
+assert.match(worker, /Number\\(!!b\\.tv360EventFeed\\)-Number\\(!!a\\.tv360EventFeed\\)/,
+  'Worker channel sorting must prioritize the paired event media candidate');
+
 for (const file of runtimeFiles) {
   const source = fs.readFileSync(file, 'utf8');
   assert.match(source, /function isTv360ResolverUrl\(value\)/,
