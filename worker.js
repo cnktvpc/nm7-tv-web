@@ -1456,8 +1456,8 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load2&retryToast=20261019-cleanup1';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-logo-scroll-load2&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load3&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-logo-scroll-load3&retryToast=20261019-cleanup1';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
 function noCacheResponseHeaders(sourceHeaders){
@@ -1526,7 +1526,11 @@ function activateLogos(){
 }
 try{bindLogoActivationEvents();activateLogos()}catch(e){}
 `;
- if(!fixed.includes('NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH'))fixed+='\n'+logoScrollPatch;
+ if(!fixed.includes('NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH')){
+  const closingIndex=fixed.lastIndexOf('})();');
+  if(closingIndex<0)return new Response('Logo scroll patch failed: runtime IIFE closing marker not found.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
+  fixed=fixed.slice(0,closingIndex)+logoScrollPatch+'\n'+fixed.slice(closingIndex);
+ }
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
