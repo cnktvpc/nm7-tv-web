@@ -14,7 +14,7 @@ const runtimeFiles = [
 
 assert.match(worker, /function isTv360ResolverUrl\(value\)/,
   'Worker must identify the TV360 resolver endpoint');
-assert.ok(worker.includes('forceProxy:/vietanhtv\\.id\\.vn/i.test(ps[0])||isTv360ResolverUrl(ps[0])'),
+assert.ok(worker.includes(String.raw`forceProxy:/vietanhtv\\.id\\.vn/i.test(ps[0])||isTv360ResolverUrl(ps[0])`),
   'M3U parsing must mark TV360 resolver candidates as proxy-first');
 assert.match(worker, /h\.set\('User-Agent',q\.get\('ua'\)\|\|fallbackUA\)/,
   'Worker stream proxy must preserve an explicit playlist User-Agent');
@@ -35,10 +35,14 @@ for (const file of runtimeFiles) {
   const source = fs.readFileSync(file, 'utf8');
   assert.match(source, /function retryTv360Resolver\(c,cand,gen,reason\)/,
     file + ': runtime must retry transient TV360 resolver errors');
-  assert.match(source, /httpStatus===404&&retryTv360Resolver/,
-    file + ': HLS HTTP 404 must retry the resolver before advancing candidates');
-  assert.match(source, /tv360Http404FromShaka\(e\)===404&&retryTv360Resolver/,
-    file + ': Shaka HTTP 404 must trigger the bounded TV360 retry');
+  assert.match(source, /httpStatus===404\|\|httpStatus===408\|\|httpStatus===429\|\|httpStatus>=500/,
+    file + ': HLS transient HTTP failures must retry the resolver before advancing candidates');
+  assert.match(source, /function tv360TransientHttpStatusFromShaka\(e\)/,
+    file + ': Shaka must classify transient resolver HTTP failures');
+  assert.match(source, /var tv360Status=tv360TransientHttpStatusFromShaka\(e\)/,
+    file + ': fatal Shaka errors must invoke bounded transient HTTP recovery');
+  assert.match(source, /var tv360LoadStatus=tv360TransientHttpStatusFromShaka\(e\)/,
+    file + ': Shaka manifest-load failures must invoke bounded transient HTTP recovery');
   assert.match(source, /S\.tv360404RetryCount>=2/,
     file + ': retries must be bounded at two per resolver URL');
 }
