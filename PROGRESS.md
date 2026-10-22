@@ -1,3 +1,12 @@
+## 2026-10-22 — Tiếp tục sửa TV360+15
+
+- Đã sửa dòng newline escape còn sót trong runtime legacy `web-tv/app-safari-policy.js` theo assertion startup regression: [commit 5b6ec21](https://github.com/cnktvpc/nm7-tv-web/commit/5b6ec21af380cffec36f5877dae943d516b5fded).
+- Chạy lại CI sau commit này để xác minh lỗi startup regression đã hết; chỉ deploy khi toàn bộ required checks đạt.
+- Bằng chứng metadata đã kiểm tra: nguồn sự kiện có mục TV360+15 với KID khớp KID MPD production. Chưa coi đây là xác nhận KEY giải mã được; cần kiểm thử playback thực tế.
+- Production chưa được deploy thay đổi mới. Giữ nguyên URL playlist mặc định và không sửa NM7 TV Android/Mobile.
+
+---
+
 ## 2026-10-22 — Follow-up kiểm tra TV360+15 sau yêu cầu tiếp tục
 
 - Kiểm tra trực tiếp qua trình duyệt Cloudflare Browser Rendering: `/api/playlist?source=tv&default=1` trả HTTP 200, có 319 kênh; TV360+15 có đúng 1 candidate resolver `vmttv.dpdns.org/tv360/?id=tv360-15`, có metadata ClearKey.
