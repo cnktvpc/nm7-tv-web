@@ -94,8 +94,8 @@ for (const file of runtimeFiles) {
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
 assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-tv360-dash-reproxy-fix1&retryToast=20261019-cleanup1'),
   'HTML must use the cache key for the TV360 probe recovery fix');
-assert.ok(worker.includes('20261022-tv360-probe-recovery1'),
-  'Worker PC/mobile runtime fallbacks must use the same cache key');
+assert.ok(worker.includes('app-safari-policy-mobile-controls.js?v=20261022-tv360-dash-reproxy-fix1'),
+  'Worker PC/mobile runtime fallbacks must use the active DASH reproxy cache key');
 assert.ok(worker.includes('const probeSucceeded=attemptedGet?(getStatus>=200&&getStatus<300):!!r?.ok;'),
   'Worker must use the GET response status when a range GET is attempted');
 assert.ok(worker.includes('type:probeSucceeded?type:"http",contentType:ct,status,headStatus,getStatus,errorHint,'),
