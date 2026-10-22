@@ -1,3 +1,12 @@
+## TV360+15 — trạng thái xác minh mới nhất (2026-10-22)
+
+- Worker proxy DASH đã sửa và manifest/segment từng trả HTTP 200, nhưng phát hình/tiếng trên Web vẫn chưa được xác nhận.
+- Đối chiếu production cho thấy KID trong manifest TV360+15 không khớp với KID metadata ClearKey đang gắn trong playlist; ba nguồn playlist đang cấu hình cũng chưa có metadata trùng KID đó. Resolver đồng thời vẫn có phản hồi HTTP 404 không ổn định.
+- Không tự tạo hoặc thay khóa DRM, không đổi URL playlist, không sửa NM7 TV Android/Mobile. Xem chi tiết trong [PROGRESS.md](./PROGRESS.md).
+- PR #24 vẫn chưa đủ điều kiện coi là hoàn thành: GitHub Actions rerun tiếp tục thất bại nhưng không trả steps/log; cần xử lý kiểm thử và xác minh phát thực tế trước khi merge/deploy tiếp.
+
+---
+
 ## 2026-10-22 — TV360+15: DASH segment proxy đã sửa; DRM KID mismatch còn chặn playback
 
 - Production Worker **version 508** đã được cập nhật trực tiếp trên Cloudflare. Deployment ID: `eb7ccc0f-3830-4108-8665-8cef9982733f`. Đã xác minh các binding hiện hữu vẫn còn: `ASSETS`, `PLAYLIST_SOURCE → phuongnm7-playlist`, `THETHAO_SOURCE → thethaonm7`.
