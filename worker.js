@@ -738,7 +738,7 @@ async function probeResponse(request,q){
       return new Response(JSON.stringify({status:0,errorClass:String(e?.name||"Error")} ),{headers:{"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Cache-Control":"no-store"}});
     }
   }
-  let r=null,bodyText="",bodyBytes=0,headStatus=0,getStatus=0;
+  let r=null,bodyText="",bodyBytes=0,headStatus=0,getStatus=0,attemptedGet=false;
   try{r=await fetchWithTimeout(target,{method:"HEAD",headers},5000);headStatus=r.status}catch{}
   let finalUrl=r?.url||target,ct=(r?.headers.get("content-type")||"").toLowerCase();
   let type=detectMediaType(finalUrl,ct);
@@ -748,6 +748,7 @@ async function probeResponse(request,q){
     try{
       const getHeaders=new Headers(headers);
       getHeaders.set("Range","bytes=0-2047");
+      attemptedGet=true;
       const gr=await fetchWithTimeout(target,{method:"GET",headers:getHeaders},7000);
       r=gr;getStatus=gr.status;finalUrl=gr.url||target;ct=(gr.headers.get("content-type")||"").toLowerCase();
       const reader=gr.body?.getReader();
@@ -761,7 +762,8 @@ async function probeResponse(request,q){
       if(type==="http")type=detectMediaType(target,ct);
     }
   }
-  const status=r?.status||0;
+  const status=attemptedGet?(getStatus||0):(r?.status||0);
+  const probeSucceeded=attemptedGet?(getStatus>0&&getStatus<400):!!r?.ok;
   const bodyLower=String(bodyText||"").toLowerCase();
   // Return safe response fingerprints only; never echo upstream body, URLs or credentials.
   const bodyTrim=String(bodyText||"").trimStart();
@@ -788,7 +790,7 @@ async function probeResponse(request,q){
   else if(status>=500)errorHint="upstream-server-error";
   else if(status===0)errorHint="network-or-timeout";
   return new Response(JSON.stringify({
-    type,contentType:ct,status,headStatus,getStatus,errorHint,
+    type:probeSucceeded?type:"http",contentType:ct,status,headStatus,getStatus,errorHint,
     bodyClass,bodyBytes,finalHost,
     serverType:r?.headers.get("server")||"",
     viaPresent:!!r?.headers.get("via"),
@@ -1456,8 +1458,8 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load4&retryToast=20261019-cleanup1';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-logo-scroll-load4&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
 function noCacheResponseHeaders(sourceHeaders){
