@@ -43,9 +43,28 @@ for (const file of runtimeFiles) {
 }
 
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load1&retryToast=20261019-cleanup1'),
-  'HTML must bump the active runtime cache key for the TV360 fix');
-assert.ok(worker.includes('20261022-logo-scroll-load1'),
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1'),
+  'HTML must use the cache key for the TV360 probe recovery fix');
+assert.ok(worker.includes('20261022-tv360-probe-recovery1'),
   'Worker PC/mobile runtime fallbacks must use the same cache key');
+assert.ok(worker.includes('const probeSucceeded=attemptedGet?(getStatus>0&&getStatus<400):!!r?.ok;'),
+  'Worker must use the GET response status when a range GET is attempted');
+assert.ok(worker.includes('type:probeSucceeded?type:"http",contentType:ct,status,headStatus,getStatus,errorHint,'),
+  'Failed upstream responses must not be exposed as valid DASH/HLS probe results');
 
+for (const file of runtimeFiles) {
+  const source = fs.readFileSync(file, 'utf8');
+  const probeStart = source.indexOf('function probeCandidate(c,cand,gen){');
+  const probeEnd = source.indexOf('function markPlaying(gen){', probeStart);
+  assert.ok(probeStart >= 0 && probeEnd > probeStart, file + ': probeCandidate must exist');
+  const probeBody = source.slice(probeStart, probeEnd);
+  assert.ok(probeBody.indexOf('var upstreamStatus=Number(d&&d.status||0);') < probeBody.indexOf('cand.type=d.type;'),
+    file + ': HTTP status must be checked before trusting detected media type');
+  assert.ok(probeBody.includes('retryTv360Resolver(c,cand,gen,transientReason)'),
+    file + ': transient resolver errors must use bounded retries');
+  assert.ok(probeBody.includes("retryTv360Resolver(c,cand,gen,'Probe request '+probeError)"),
+    file + ': probe transport errors must retry before abandoning TV360');
+  assert.ok(source.includes('Shaka init exception '),
+    file + ': Shaka initialization exceptions must retain their actual reason');
+}
 console.log('TV360_PLAYBACK_ROUTING_REGRESSION_OK');
