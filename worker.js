@@ -1562,6 +1562,7 @@ function patchTv360RuntimeSource(fixed) {
  })
 }`;
  fixed=one(fixed,oldCatch,newCatch,"probe fetch failure");
+ fixed=one(fixed,"if(S.tv360404RetryCount>=2)return false;","if(S.tv360404RetryCount>=5)return false;","TV360 bounded retry ceiling");
  fixed=one(fixed,"if(httpStatus===404&&retryTv360Resolver(c,cand,gen,'HLS HTTP 404'))return;","if((httpStatus===404||httpStatus===408||httpStatus===429||httpStatus>=500)&&retryTv360Resolver(c,cand,gen,'HLS HTTP '+httpStatus))return;","HLS HTTP failure");
  return fixed+"\n/*"+marker+"*/\n";
 }
