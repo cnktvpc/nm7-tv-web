@@ -1024,7 +1024,27 @@ function probeCandidate(c,cand,gen){
  if(cand.headers&&Object.keys(cand.headers).length)u+='&h='+encodeURIComponent(JSON.stringify(cand.headers));
  fetch(u,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).then(function(d){
   if(gen!==S.generation||!S.player)return;
-  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){nextCandidate('Không xác định được định dạng');return}
+  var upstreamStatus=Number(d&&d.status||0);
+  var getStatus=Number(d&&d.getStatus||0);
+  var headStatus=Number(d&&d.headStatus||0);
+  var isTv360=isTv360ResolverUrl(cand.url||'');
+  // A resolver may redirect to an .mpd URL even when its actual response is
+  // 404/503. Do not infer a valid DASH stream from the redirected path alone.
+  var transientProbeFailure=upstreamStatus===0||upstreamStatus===404||
+   upstreamStatus===408||upstreamStatus===429||upstreamStatus>=500||
+   (getStatus===0&&headStatus>=400);
+  if(isTv360&&transientProbeFailure){
+   var transientReason=upstreamStatus>0?'TV360 resolver HTTP '+upstreamStatus:'TV360 resolver probe mạng/timeout';
+   if(retryTv360Resolver(c,cand,gen,transientReason))return;
+   nextCandidate(transientReason);return;
+  }
+  if(isTv360&&upstreamStatus>=400){
+   nextCandidate('TV360 resolver HTTP '+upstreamStatus+' · '+String(d&&d.errorHint||'upstream lỗi'));
+   return;
+  }
+  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){
+   nextCandidate('Không xác định được định dạng');return
+  }
   cand.type=d.type;
   cand.mime=d.contentType||cand.mime||'';
   cand.resolvedUrl=d.resolvedUrl||d.finalUrl||cand.url;
@@ -1036,9 +1056,15 @@ function probeCandidate(c,cand,gen){
   cand.resolvedUrl=resolved;
   S.proxyAttempt=attemptUsesProxy(cand,d.type);var url=makeProxy(resolved,cand);
   clearPlayers();
-  setStatus('Đang phát '+c.name+'\nNguồn '+(S.candidateIndex+1)+'/'+c.candidates.length+(S.proxyAttempt?' · proxy':''));
+  setStatus('Đang phát '+c.name+'\\nNguồn '+(S.candidateIndex+1)+'/'+c.candidates.length+(S.proxyAttempt?' · proxy':''));
   startByType(c,cand,url,d.type,gen);
- }).catch(function(e){if(gen===S.generation&&S.player){dbg('Probe '+(e&&e.message||e));nextCandidate('Probe lỗi')}})
+ }).catch(function(e){
+  if(gen!==S.generation||!S.player)return;
+  var probeError=String(e&&e.message||e||'request failed').slice(0,100);
+  dbg('Probe '+probeError);
+  if(retryTv360Resolver(c,cand,gen,'Probe request '+probeError))return;
+  nextCandidate('Probe lỗi'+(probeError?' · '+probeError:''));
+ })
 }
 function markPlaying(gen){if(gen!==S.generation||!S.player)return;if(S.watchdog){clearTimeout(S.watchdog);S.watchdog=null}clearToast();hideStatus()}
 function startDirect(c,cand,url,gen){
@@ -1412,6 +1438,12 @@ function startShaka(c,cand,url,drm,gen){
    if(gen!==S.generation||S.shaka!==p||!ev||!ev.detail)return;
    var e=ev.detail,code=e.code||'',cat=e.category||'';
    dbg('Shaka '+code+' cat='+cat+' data='+(e.data?JSON.stringify(e.data):'')+' '+(e.message||''));
+   if(Number(code)===4012){
+    var restrictionData=Array.isArray(e.data)?e.data[0]:null;
+    var missingKeyCount=restrictionData&&Array.isArray(restrictionData.missingKeys)?restrictionData.missingKeys.length:0;
+    var keyStatusCount=restrictionData&&Array.isArray(restrictionData.restrictedKeyStatuses)?restrictionData.restrictedKeyStatuses.length:0;
+    dbg('Shaka 4012 restriction diagnostic: missingKeys='+missingKeyCount+' restrictedKeyStatuses='+keyStatusCount);
+   }
    if(appleDrm){
     if(transientDrmError(e)){
      // Let Shaka's built-in MediaSource recovery handle transient iOS MSE errors.
@@ -1514,11 +1546,13 @@ function startShaka(c,cand,url,drm,gen){
   if(appleDrm)armDrmStallWatch('startup');
 
  }catch(e){
+  var initError=String(e&&e.message||e||'unknown').slice(0,120);
+  dbg('Shaka init exception '+initError);
   if(isAppleTouchDevice()&&isDashDrmCandidate(cand)){
-   hardRestartDrm(c,cand,gen,'Shaka init '+String(e&&e.message||e));
+   hardRestartDrm(c,cand,gen,'Shaka init '+initError);
    return;
   }
-  nextCandidate('Shaka khởi tạo lỗi');
+  nextCandidate('Shaka khởi tạo lỗi · '+initError);
  }
 }
 
