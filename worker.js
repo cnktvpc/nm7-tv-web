@@ -1498,7 +1498,7 @@ function patchTv360RuntimeSource(fixed) {
  const safeGetter="function getCandidate(){\n var a=S.current&&Array.isArray(S.current.candidates)?S.current.candidates:[];\n if(!a.length)return null;\n var requested=Number(S.candidateIndex);\n if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;\n for(var offset=0;offset<a.length;offset++){\n  var i=(requested+offset)%a.length,c=a[i],u=String(c&&(c.resolvedUrl||c.url)||'').trim();\n  if(u&&u!=='undefined'&&u!=='null'&&u!=='NaN'){S.candidateIndex=i;return normalizeCandidate(c)}\n }\n return null\n}";
  if(fixed.includes(oldGetter))fixed=one(fixed,oldGetter,safeGetter,'invalid candidate index guard');
  else if(!fixed.includes('if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;'))throw new Error('Unrecognized candidate selector; refuse to probe undefined URL');
- const oldProxyFirst="function shouldProxyFirst(cand,kind){\\n cand=normalizeCandidate(cand||{});";
+ const oldProxyFirst="function shouldProxyFirst(cand,kind){\n cand=normalizeCandidate(cand||{});";
  const safeProxyFirst="function shouldProxyFirst(cand,kind){\n cand=normalizeCandidate(cand||{});\n // TV360 resolver channels must be Worker-proxied even when their cached\n // candidate lost the forceProxy marker; direct browser requests can stall on CDN redirects.\n if(isTv360ResolverUrl(cand.url||''))return true;\n var activeChannel=S.current||{};\n if(/^TV360\\s*\\+\\s*\\d+$/i.test(String(activeChannel.name||''))&&/tv360/i.test(String(activeChannel.group||'')))return true;";
  if(!fixed.includes('var activeChannel=S.current||{};'))fixed=one(fixed,oldProxyFirst,safeProxyFirst,'TV360 proxy-first routing');
  const toHex=String.raw`function toHex16(v){
