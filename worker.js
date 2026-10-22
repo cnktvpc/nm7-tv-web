@@ -1526,7 +1526,7 @@ function activateLogos(){
 }
 try{bindLogoActivationEvents();activateLogos()}catch(e){}
 `;
- if(!fixed.includes('NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH'))fixed+='\\n'+logoScrollPatch;
+ if(!fixed.includes('NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH'))fixed+='\n'+logoScrollPatch;
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
