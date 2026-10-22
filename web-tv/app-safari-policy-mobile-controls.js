@@ -1083,7 +1083,7 @@ function probeCandidate(c,cand,gen){
   cand.resolvedUrl=resolved;
   S.proxyAttempt=attemptUsesProxy(cand,d.type);var url=makeProxy(resolved,cand);
   clearPlayers();
-  setStatus('Đang phát '+c.name+'\\nNguồn '+(S.candidateIndex+1)+'/'+c.candidates.length+(S.proxyAttempt?' · proxy':''));
+  setStatus('Đang phát '+c.name+'\nNguồn '+(S.candidateIndex+1)+'/'+c.candidates.length+(S.proxyAttempt?' · proxy':''));
   startByType(c,cand,url,d.type,gen);
  }).catch(function(e){
   if(gen!==S.generation||!S.player)return;
