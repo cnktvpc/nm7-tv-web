@@ -1,3 +1,13 @@
+## Cập nhật tiếp tục điều tra TV360+15 — 22/10/2026 (trạng thái chưa phát hành)
+
+- Nhánh tiếp tục sử dụng: `fix/tv360-probe-http-recovery-20261022`; PR [#24](https://github.com/cnktvpc/nm7-tv-web/pull/24) vẫn mở. Các commit trong đợt sửa tiếp theo: [9296fc4](https://github.com/cnktvpc/nm7-tv-web/commit/9296fc49094b0fa0f00494c70a98f1dec27a9b0e), [ff09b4d](https://github.com/cnktvpc/nm7-tv-web/commit/ff09b4d555ecf2dc14675c6c637462bb933aefe7), [fd2ce2f](https://github.com/cnktvpc/nm7-tv-web/commit/fd2ce2f8a0cc372b59739da7a6c1e721ab96e2b2). Các thay đổi sửa escape newline ở những runtime đang dùng và đồng bộ assertion cache-buster.
+- Đã lấy log GitHub Actions trực tiếp. Routing regression, Browser Validation và LIVE metadata hide hiện dừng ở assertion trong `scripts/test-playback-startup-fallback.js` vì file legacy `web-tv/app-safari-policy.js` vẫn có một chuỗi newline escape kép. HTML production/nhánh và Worker đang tham chiếu các runtime `mobile-controls`/ `pc-controls`, không tham chiếu file legacy này; tuy nhiên CI hiện tại vẫn kiểm tra nó, nên chưa coi CI là đạt. Production Manifest Smoke và Browser remote + HLS E2E đều xanh.
+- Đối chiếu thêm nguồn metadata sự kiện `Bacbenny/dekiki/main/film4k.m3u`: mục `Kênh TV360+ 15` có một cặp ClearKey 128-bit hợp lệ theo định dạng và KID của nó khớp với KID `fa403384-1a70-511c-84a7-fe7e0daf1a6a` đã đọc từ MPD production. Không ghi KEY vào log. Đây là bằng chứng để kiểm thử overlay metadata; vẫn chưa chứng minh KEY giải mã được video/audio trên thiết bị Web.
+- Worker production chưa có bằng chứng đã nhận thay đổi overlay metadata từ nhánh PR. Guarded deployment vẫn bị skip vì CI chưa xanh; không merge và không deploy thêm. Chưa xác nhận phát TV360+15 thành công trên thiết bị thật.
+- Phạm vi vẫn giới hạn NM7 TV Web/Cloudflare; không sửa NM7 TV Android/Mobile, không đổi URL playlist mặc định, không tự tạo khóa DRM.
+
+---
+
 ## TV360+15 — trạng thái xác minh mới nhất (2026-10-22)
 
 - Worker proxy DASH đã sửa và manifest/segment từng trả HTTP 200, nhưng phát hình/tiếng trên Web vẫn chưa được xác nhận.
