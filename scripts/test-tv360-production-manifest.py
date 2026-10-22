@@ -143,6 +143,161 @@ def check_manifest(channel_id):
     fail(label + f": upstream/proxy returned HTTP {status} after bounded retries (content-type={content_type or 'unknown'}); see safe resolver diagnostic above")
 
 
+
+def check_dash_children(channel_id, body):
+    """Fetch DASH initialization and an actually current live media segment via the Worker."""
+    import datetime
+    import math
+    import xml.etree.ElementTree as ET
+
+    label = "TV360+" + channel_id
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as error:
+        fail(label + ": proxy DASH manifest is not valid XML (" + type(error).__name__ + ")")
+    ns = {"d": "urn:mpeg:dash:schema:mpd:2011"}
+
+    def parse_datetime(value):
+        try:
+            return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return 0.0
+
+    ast = parse_datetime(root.get("availabilityStartTime", ""))
+    period = root.find("d:Period", ns)
+    period_start = 0.0
+    if period is not None:
+        raw_start = str(period.get("start", "PT0S"))
+        match = re.fullmatch(r"PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?", raw_start)
+        if match:
+            period_start = float(match.group(1) or 0) * 3600 + float(match.group(2) or 0) * 60 + float(match.group(3) or 0)
+
+    def fetch_resource(uri, label_part):
+        last = (0, "", b"")
+        for attempt in range(1, 4):
+            last = http_get(uri, f"dash-{channel_id}-{label_part}-{attempt}",
+                            byte_range="bytes=0-1023", allow_http_errors=True)
+            if last[0] in (200, 206) and last[2]:
+                return last
+            if attempt < 3:
+                time.sleep(attempt)
+        return last
+
+    initialized = set()
+    media_ok = set()
+    for aset in root.findall(".//d:AdaptationSet", ns):
+        reps = aset.findall("d:Representation", ns)
+        if not reps:
+            continue
+        rep = reps[0]
+        template = rep.find("d:SegmentTemplate", ns)
+        if template is None:
+            template = aset.find("d:SegmentTemplate", ns)
+        if template is None:
+            continue
+
+        rid = rep.get("id", "")
+        bandwidth = rep.get("bandwidth", "0")
+        start_number = int(template.get("startNumber", "1") or "1")
+        timescale = int(template.get("timescale", "1") or "1")
+        duration = int(template.get("duration", "0") or "0")
+        pto = int(template.get("presentationTimeOffset", "0") or "0")
+        timeline = template.find("d:SegmentTimeline", ns)
+        if timeline is None:
+            timeline = aset.find("d:SegmentTimeline", ns)
+        points = []
+        if timeline is not None:
+            entries = timeline.findall("d:S", ns)
+            cursor = 0
+            total_segments = 0
+            for idx, segment in enumerate(entries):
+                if segment.get("t") is not None:
+                    cursor = int(segment.get("t"))
+                d = int(segment.get("d", "0") or "0")
+                repeat = int(segment.get("r", "0") or "0")
+                if d <= 0:
+                    continue
+                if repeat >= 0:
+                    count = repeat + 1
+                elif repeat == -1:
+                    next_start = None
+                    for later in entries[idx + 1:]:
+                        if later.get("t") is not None:
+                            next_start = int(later.get("t"))
+                            break
+                    if next_start is not None:
+                        count = max(1, math.ceil((next_start - cursor) / d))
+                    elif ast:
+                        live_units = max(0.0, (time.time() - ast - period_start) * timescale + pto)
+                        # Avoid the newest not-yet-published fragment in this live MPD.
+                        target = max(cursor, int(live_units - 5 * timescale))
+                        last_offset = max(0, int((target - cursor) // d))
+                        count = last_offset + 1
+                    else:
+                        count = 1
+                else:
+                    count = 1
+                # Keep only recent points; some dynamic MPDs have r=-1 spanning
+                # many hours, so materializing every historical segment is unsafe.
+                first_needed = max(0, count - 10)
+                for offset in range(first_needed, count):
+                    points.append((cursor + offset * d, start_number + total_segments + offset))
+                total_segments += count
+                cursor += count * d
+                if len(points) > 20:
+                    points = points[-20:]
+        elif duration > 0 and ast:
+            live_units = max(0.0, (time.time() - ast - period_start) * timescale + pto)
+            latest = max(0, int(live_units // duration))
+            points = [(n * duration + pto, start_number + n) for n in range(max(0, latest - 12), latest + 1)]
+
+        points = points[-10:] if points else [(pto, start_number)]
+        def expand(value, point):
+            if not value:
+                return ""
+            segment_time, segment_number = point
+            def substitute(match):
+                field, width = match.group(1), match.group(2)
+                data = {"RepresentationID": rid, "Number": str(segment_number),
+                        "Time": str(segment_time), "Bandwidth": str(bandwidth)}.get(field, match.group(0))
+                return data.zfill(int(width)) if width else data
+            return re.sub(r"\$(RepresentationID|Number|Time|Bandwidth)(?:%0(\d+)d)?\$", substitute, value)
+
+        init_template = template.get("initialization", "")
+        if init_template and rid not in initialized:
+            init_uri = urljoin(BASE_URL + "/", expand(init_template, points[-1]))
+            status, content_type, payload = fetch_resource(init_uri, "init-" + rid)
+            if status not in (200, 206) or not payload:
+                fail(label + f": DASH initialization failed HTTP {status} (content-type={content_type or 'unknown'})")
+            print(f"TV360_DASH_RESOURCE_OK channel={channel_id} kind=initialization http={status} bytes={len(payload)} content_type={content_type or 'unknown'}")
+            initialized.add(rid)
+
+        media_template = template.get("media", "")
+        if media_template and rid not in media_ok:
+            last_result = (0, "", b"")
+            chosen = None
+            for point in reversed(points):
+                media_uri = urljoin(BASE_URL + "/", expand(media_template, point))
+                last_result = fetch_resource(media_uri, "media-" + rid + "-" + str(point[1]))
+                if last_result[0] in (200, 206) and last_result[2]:
+                    chosen = point
+                    break
+            status, content_type, payload = last_result
+            if chosen is None:
+                diagnostic = payload[:100].decode("utf-8", "replace").replace("\n", " ")
+                diagnostic = "".join(ch for ch in diagnostic if ch.isprintable())[:100]
+                print("TV360_DASH_MEDIA_FAILURE channel=" + channel_id,
+                      "representation=" + rid, "timescale=" + str(timescale),
+                      "timelineEntries=" + str(len(timeline.findall("d:S", ns)) if timeline is not None else 0),
+                      "lastPoint=" + str(points[-1]), "http=" + str(status),
+                      "bodyHint=" + (diagnostic or "non-text-or-empty"))
+                fail(label + f": DASH media resource failed HTTP {status} for the recent live timeline (content-type={content_type or 'unknown'})")
+            print(f"TV360_DASH_RESOURCE_OK channel={channel_id} kind=media http={status} bytes={len(payload)} content_type={content_type or 'unknown'} livePoint={chosen}")
+            media_ok.add(rid)
+
+    if not initialized or not media_ok:
+        fail(label + ": manifest did not expose reachable DASH initialization and media resources")
+
 def check_hls_child(body):
     next_uri = playlist_uri(body)
     if not next_uri:
@@ -175,6 +330,8 @@ def main():
         kind, body = check_manifest(channel_id)
         if channel_id == "10" and kind == "hls":
             check_hls_child(body)
+        if channel_id in ("13", "15") and kind == "dash":
+            check_dash_children(channel_id, body)
     print("TV360_PRODUCTION_MEDIA_SMOKE_OK")
 
 

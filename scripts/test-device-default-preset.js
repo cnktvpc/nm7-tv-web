@@ -109,6 +109,6 @@ for (const file of appFiles) {
 }
 
 const indexHtml = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(indexHtml.includes('app-safari-policy-mobile-controls.js?v=20261022-tv360-probe-recovery1'), 'index.html must use the active mobile-controls runtime cache-buster');
+assert.ok(indexHtml.includes('app-safari-policy-mobile-controls.js?v=20261022-tv360-dash-reproxy-fix1'), 'index.html must use the active mobile-controls runtime cache-buster');
 
 console.log('DEVICE_DEFAULT_TV_PRESET_TESTS_OK');

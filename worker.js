@@ -209,53 +209,134 @@ async function fetchPlaylistTarget(target,init={},env=null,ms=10000){
   }
   return fetchWithTimeout(target,init,ms);
 }
-function mergeTv360EventKeys(channels,eventChannels){
-  const channelNumber=(channel)=>{
-    const values=[channel&&channel.name,channel&&channel.id,channel&&channel.tvgId];
-    const patterns=[/(?:k[eê]nh\s*)?tv360\s*\+\s*(\d{1,2})/i,/\btv360plus\s*(\d{1,2})\b/i,/\btv360-(\d{1,2})\b/i];
-    for(const value of values){const text=String(value||'');for(const pattern of patterns){const match=pattern.exec(text);if(match)return Number(match[1])||0}}
-    return 0;
-  };
-  const is16Bytes=(value)=>{
-    const text=String(value||'').trim().replace(/^["']|["']$/g,'');
-    if(/^[0-9a-f]{32}$/i.test(text))return true;
-    if(!/^[A-Za-z0-9_+\/-]{22,24}={0,2}$/.test(text))return false;
-    try{let encoded=text.replace(/-/g,'+').replace(/_/g,'/');encoded+='='.repeat((4-encoded.length%4)%4);return atob(encoded).length===16}catch{return false}
-  };
-  const validClearKey=(value)=>{
-    const text=String(value||'').trim();if(!text||/^https?:\/\//i.test(text))return false;
-    const validPair=(kid,key)=>is16Bytes(kid)&&is16Bytes(key);
-    if(text[0]==='{'){
-      try{
-        const data=JSON.parse(text);
-        if(Array.isArray(data.keys))return data.keys.some(entry=>entry&&validPair(entry.kid||entry.keyId,entry.k||entry.key));
-        if(data.keys&&typeof data.keys==='object')return Object.keys(data.keys).some(kid=>validPair(kid,data.keys[kid]));
-        if(data.kid&&(data.k||data.key))return validPair(data.kid,data.k||data.key);
-      }catch{}
-      return false;
+function normalizeClearKeyKid(value){
+  const text=String(value||'').trim().replace(/^["']|["']$/g,'');
+  const rawHex=text.replace(/-/g,'');
+  if(/^[0-9a-f]{32}$/i.test(rawHex))return rawHex.toLowerCase();
+  try{
+    let encoded=text.replace(/-/g,'+').replace(/_/g,'/');
+    encoded+='='.repeat((4-encoded.length%4)%4);
+    const bytes=atob(encoded);
+    if(bytes.length===16){let hex='';for(let i=0;i<bytes.length;i++)hex+=('0'+bytes.charCodeAt(i).toString(16)).slice(-2);return hex}
+  }catch{}
+  return '';
+}
+function clearKeyKidIds(value){
+  const out=new Set(),text=String(value||'').trim();
+  const add=(kid,key)=>{const normalized=normalizeClearKeyKid(kid),validKey=normalizeClearKeyKid(key);if(normalized&&validKey)out.add(normalized)};
+  if(text.startsWith('{')){
+    try{
+      const data=JSON.parse(text);
+      if(Array.isArray(data.keys)){
+        for(const item of data.keys)if(item)add(item.kid||item.keyId,item.k||item.key||item.value);
+      }else if(data.keys&&typeof data.keys==='object'){
+        for(const kid of Object.keys(data.keys))add(kid,data.keys[kid]);
+      }
+      if(data.kid&&(data.k||data.key))add(data.kid,data.k||data.key);
+    }catch{}
+  }else{
+    for(const part of text.split(/[;,\s]+/)){
+      const index=part.indexOf(':');
+      if(index>0&&part.indexOf(':',index+1)<0)add(part.slice(0,index),part.slice(index+1));
+      const match=/\bkid\s*=\s*([^&;,\s]+)/i.exec(part);
+      if(match){const keyMatch=/\bkey\s*=\s*([^&;,\s]+)/i.exec(text);if(keyMatch)add(match[1],keyMatch[1])}
     }
-    for(const part of text.split(/[;,\s]+/)){const index=part.indexOf(':');if(index>0&&part.indexOf(':',index+1)<0&&validPair(part.slice(0,index),part.slice(index+1)))return true}
-    return false;
-  };
+  }
+  return out;
+}
+function dashManifestKidIds(text){
+  const out=new Set(),source=String(text||'');
+  const regex=/(?:cenc:)?default_KID\s*=\s*["']([^"']+)["']/gi;
+  let match;while((match=regex.exec(source))!==null){
+    const normalized=normalizeClearKeyKid(match[1]);if(normalized)out.add(normalized);
+  }
+  return out;
+}
+function tv360ChannelNumber(channel){
+  const values=[channel&&channel.name,channel&&channel.id,channel&&channel.tvgId];
+  const patterns=[/(?:k[eê]nh\s*)?tv360\s*\+\s*(\d{1,2})/i,/\btv360plus\s*(\d{1,2})\b/i,/\btv360-(\d{1,2})\b/i];
+  for(const value of values){const text=String(value||'');for(const pattern of patterns){const match=pattern.exec(text);if(match)return Number(match[1])||0}}
+  return 0;
+}
+async function probeTv360ResolverKids(channels,eventChannels){
   const activeByNumber=new Map();
   for(const eventChannel of Array.isArray(eventChannels)?eventChannels:[]){
     if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
-    const number=channelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
+    const number=tv360ChannelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
     const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
-      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&validClearKey(candidate.drm.key)&&
+      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&clearKeyKidIds(candidate.drm.key).size&&
+      (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
+    if(eventCandidate)activeByNumber.set(number,eventCandidate);
+  }
+  const probes=[],seen=new Set();
+  for(const channel of Array.isArray(channels)?channels:[]){
+    if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
+    const eventCandidate=activeByNumber.get(tv360ChannelNumber(channel));
+    if(!eventCandidate)continue;
+    const eventKids=clearKeyKidIds(eventCandidate.drm.key);
+    for(const candidate of Array.isArray(channel.candidates)?channel.candidates:[]){
+      let isResolver=false;
+      try{const url=new URL(String(candidate&&candidate.url||''));isResolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
+      if(!isResolver)continue;
+      const url=String(candidate.url||'');
+      if(!url||seen.has(url))continue;
+      const existingKids=clearKeyKidIds(candidate.drm&&candidate.drm.key);
+      if([...eventKids].some(kid=>existingKids.has(kid)))continue;
+      seen.add(url);
+      probes.push((async()=>{
+        try{
+          const headers=new Headers({'Accept':'application/dash+xml,application/xml,text/xml,*/*'});
+          headers.set('User-Agent',String(candidate.ua||'Dalvik/2.1.0'));
+          if(candidate.ref)headers.set('Referer',String(candidate.ref));
+          for(const [name,value] of Object.entries(candidate.headers||{})){
+            if(typeof value!=='string'||!value.trim())continue;
+            const key=name.toLowerCase();
+            if(['host','connection','content-length','user-agent','referer'].includes(key))continue;
+            try{headers.set(name,value)}catch{}
+          }
+          const response=await fetchWithTimeout(url,{headers,redirect:'follow'},6500);
+          if(!response.ok)return [url,new Set()];
+          const body=await response.text();
+          if(!/<MPD\b/i.test(body))return [url,new Set()];
+          return [url,dashManifestKidIds(body)];
+        }catch{return [url,new Set()]}
+      })());
+    }
+  }
+  const result=new Map();
+  const settled=await Promise.all(probes);
+  for(const [url,kids] of settled)result.set(url,kids);
+  return result;
+}
+function mergeTv360EventKeys(channels,eventChannels,manifestKidsByUrl){
+  const activeByNumber=new Map();
+  for(const eventChannel of Array.isArray(eventChannels)?eventChannels:[]){
+    if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
+    const number=tv360ChannelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
+    const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
+      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&clearKeyKidIds(candidate.drm.key).size&&
       (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
     if(eventCandidate)activeByNumber.set(number,eventCandidate);
   }
   let updated=0;
   for(const channel of Array.isArray(channels)?channels:[]){
     if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
-    const number=channelNumber(channel),eventCandidate=activeByNumber.get(number);
-    if(!number||!eventCandidate||!Array.isArray(channel.candidates))continue;
+    const eventCandidate=activeByNumber.get(tv360ChannelNumber(channel));
+    if(!eventCandidate||!Array.isArray(channel.candidates))continue;
+    const eventKids=clearKeyKidIds(eventCandidate.drm.key);
     for(const candidate of channel.candidates){
-      let resolver=false;
-      try{const url=new URL(String(candidate&&candidate.url||''));resolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
-      if(!resolver)continue;
-      candidate.drm={type:'clearkey',key:eventCandidate.drm.key};candidate.dash=true;candidate.type='dash';updated++;
+      let isResolver=false;
+      try{const url=new URL(String(candidate&&candidate.url||''));isResolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
+      if(!isResolver)continue;
+      const existingKids=clearKeyKidIds(candidate.drm&&candidate.drm.key);
+      if([...eventKids].some(kid=>existingKids.has(kid)))continue;
+      const manifestKids=manifestKidsByUrl&&manifestKidsByUrl.get(String(candidate.url||''));
+      // Only copy a live event's ClearKey onto a resolver when the resolver's
+      // current MPD advertises that same KID. Dynamic TV360 IDs can be remapped;
+      // blindly merging a stale event key makes valid DRM channels fail.
+      if(!manifestKids||![...eventKids].some(kid=>manifestKids.has(kid)))continue;
+      candidate.drm={type:'clearkey',key:eventCandidate.drm.key};
+      candidate.dash=true;candidate.type='dash';updated++;
     }
   }
   return updated;
@@ -270,7 +351,8 @@ async function refreshTv360EventKeys(channels){
       if(!eventChannels.length)throw new Error('event key feed empty');
       tv360EventKeyCache={time:now,channels:eventChannels};
     }
-    const updated=mergeTv360EventKeys(channels,tv360EventKeyCache.channels);
+    const manifestKidsByUrl=await probeTv360ResolverKids(channels,tv360EventKeyCache.channels);
+    const updated=mergeTv360EventKeys(channels,tv360EventKeyCache.channels,manifestKidsByUrl);
     return {status:updated?'applied':'no-current-event-match',updated};
   }catch{return {status:'unavailable',updated:0}}
 }
@@ -1536,8 +1618,8 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-tv360-probe-recovery1&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-tv360-dash-reproxy-fix1&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-tv360-dash-reproxy-fix1&retryToast=20261019-cleanup1';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
 function noCacheResponseHeaders(sourceHeaders){
