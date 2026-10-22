@@ -71,7 +71,7 @@ function parseM3U(t,base=''){
   finish();
   const merged=[],byKey=new Map();
   for(const c of out){c.id=c.id||c.name;const gid=String(c.id||'').toLowerCase().trim(),nameKey=String(c.name||'').toLowerCase().replace(/\b(server|source|nguon)\s*\d+\b/g,'').replace(/[^a-z0-9]+/g,' ').trim(),key=(c.group||'')+'|'+(gid||nameKey);if(!byKey.has(key)){byKey.set(key,{...c,candidates:c.candidates.slice()});merged.push(byKey.get(key))}else{const x=byKey.get(key),seen=new Set(x.candidates.map(v=>v.url));for(const v of c.candidates)if(v.url&&!seen.has(v.url)){x.candidates.push(v);seen.add(v.url)}if(!x.logo&&c.logo)x.logo=c.logo}}
-  for(const c of merged){addBuiltin(c);c.candidates.sort((a,b)=>score(b.url)-score(a.url))}
+  for(const c of merged){addBuiltin(c);c.candidates.sort((a,b)=>(Number(!!b.tv360EventFeed)-Number(!!a.tv360EventFeed))||(score(String(b.url||''))-score(String(a.url||''))))}
   return merged;
 }
 function isStalkerPlaybackUrl(value){
