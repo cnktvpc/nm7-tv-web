@@ -61,6 +61,8 @@ jobs:
           node scripts/test-playback-startup-fallback.js
           node scripts/test-tv360-playback-routing.js
           node scripts/test-menu-fullscreen.js
+      - name: Verify default Vietnam XMLTV feed
+        run: python3 scripts/test-epg-feed-smoke.py
       - name: Verify guide assets
         run: |
           test -f web-tv/tv-guide.html
