@@ -1480,9 +1480,89 @@ async function liveOverlayHtmlResponse(response){
  html=html.replace(/(?:\.\/|\/)?app-safari-policy-(mobile|pc)-controls\.js(?:\?v=[^"'\s>]*)?/g,(_,variant)=>variant==='pc'?LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL:LIVE_PLAYER_OVERLAY_SCRIPT_URL);
  return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
+function patchTv360RuntimeSource(fixed) {
+ const marker="NM7_TV360_RUNTIME_RECOVERY_PATCH_20261022";
+ if(fixed.includes(marker))return fixed;
+ function one(src,from,to,label){const n=src.split(from).length-1;if(n!==1)throw new Error(label+": expected 1 match, got "+n);return src.replace(from,to)}
+ const toHex=String.raw`function toHex16(v){
+ // Keep Base64URL '-'/'_' intact until after the hexadecimal/UUID check.
+ // Removing '-' from Base64URL first corrupts valid 128-bit ClearKey values.
+ var s=String(v==null?'':v).trim().replace(/^[\"']|[\"']$/g,'').replace(/^0x/i,'');
+ var hex=s.replace(/-/g,'');
+ if(/^[0-9a-f]{32}$/i.test(hex))return hex.toLowerCase();
+ try{var b64=s.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';var b=atob(b64),h='';for(var i=0;i<b.length;i++)h+=('0'+b.charCodeAt(i).toString(16)).slice(-2);if(h.length===32)return h.toLowerCase()}catch(e){}
+ return ''
+}`;
+ const classifier=String.raw`function tv360TransientHttpStatusFromShaka(e){
+ function retryableStatus(n){return n===404||n===408||n===429||(n>=500&&n<=599)}
+ var todo=[e&&e.data],seen=0;
+ while(todo.length&&seen++<64){
+  var value=todo.shift();
+  if(value==null)continue;
+  if(typeof value==='number'){if(retryableStatus(value))return value;continue}
+  if(typeof value==='string'){
+   var match=/(?:http|status|response)[^0-9]{0,24}(404|408|429|5\d{2})/i.exec(value);
+   if(match)return Number(match[1]);
+   continue;
+  }
+  if(Array.isArray(value)){
+   for(var i=0;i<value.length;i++)if(value[i]!=null&&(typeof value[i]==='object'||typeof value[i]==='string'||typeof value[i]==='number'))todo.push(value[i]);
+   continue;
+  }
+  if(typeof value!=='object')continue;
+  for(var k of ['status','statusCode','httpStatus','responseCode']){
+   var status=Number(value[k]);if(retryableStatus(status))return status;
+  }
+  for(var k of ['response','data','error','cause'])if(value[k]&&(typeof value[k]==='object'||typeof value[k]==='string'||typeof value[k]==='number'))todo.push(value[k]);
+ }
+ return 0
+}`;
+ fixed=fixed.replace(/function toHex16\(v\)\{[\s\S]*?\n\}/,match=>{if(!match||!match.includes("replace(/-/g,''"))throw new Error("ClearKey helper mismatch");return toHex});
+ fixed=fixed.replace(/function tv360Http404FromShaka\(e\)\{[\s\S]*?\n\}/,match=>{if(!match||!match.includes("return 404"))throw new Error("Shaka status helper mismatch");return classifier});
+ fixed=one(fixed,"if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka HTTP 404'))return;","var tv360Status=tv360TransientHttpStatusFromShaka(e);if(tv360Status&&retryTv360Resolver(c,cand,gen,'Shaka HTTP '+tv360Status))return;","Shaka fatal status");
+ fixed=one(fixed,"if(tv360Http404FromShaka(e)===404&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP 404'))return;","var tv360LoadStatus=tv360TransientHttpStatusFromShaka(e);if(tv360LoadStatus&&retryTv360Resolver(c,cand,gen,'Shaka load HTTP '+tv360LoadStatus))return;","Shaka load status");
+ const oldGuard=String.raw`  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){nextCandidate('Không xác định được định dạng');return}`;
+ const newGuard=String.raw`  var upstreamStatus=Number(d&&d.status||0);
+  var getStatus=Number(d&&d.getStatus||0);
+  var headStatus=Number(d&&d.headStatus||0);
+  var isTv360=isTv360ResolverUrl(cand.url||'');
+  // A resolver can redirect to an .mpd URL while returning HTTP 404/503.
+  // The final pathname alone is not proof that the manifest is playable.
+  var transientProbeFailure=upstreamStatus===0||upstreamStatus===404||
+   upstreamStatus===408||upstreamStatus===429||upstreamStatus>=500||
+   (getStatus===0&&headStatus>=400);
+  if(isTv360&&transientProbeFailure){
+   var transientReason=upstreamStatus>0?'TV360 resolver HTTP '+upstreamStatus:'TV360 resolver probe mạng/timeout';
+   if(retryTv360Resolver(c,cand,gen,transientReason))return;
+   nextCandidate(transientReason);return;
+  }
+  if(upstreamStatus===0&&(getStatus===0||headStatus>=400)){
+   nextCandidate('Probe upstream mạng/timeout');return;
+  }
+  if(upstreamStatus>=400){
+   nextCandidate((isTv360?'TV360 resolver':'Probe upstream')+' HTTP '+upstreamStatus+' · '+String(d&&d.errorHint||'upstream lỗi'));
+   return;
+  }
+  if(!d||!d.type||(d.type==='http'&&!d.resolvedUrl)){nextCandidate('Không xác định được định dạng');return}`;
+ fixed=one(fixed,oldGuard,newGuard,"probe HTTP guard");
+ const oldCatch=String.raw` }).catch(function(e){if(gen===S.generation&&S.player){dbg('Probe '+(e&&e.message||e));nextCandidate('Probe lỗi')}})
+}`;
+ const newCatch=String.raw` }).catch(function(e){
+  if(gen!==S.generation||!S.player)return;
+  var probeError=String(e&&e.message||e||'request failed').slice(0,100);
+  dbg('Probe '+probeError);
+  if(retryTv360Resolver(c,cand,gen,'Probe request '+probeError))return;
+  nextCandidate('Probe lỗi'+(probeError?' · '+probeError:''));
+ })
+}`;
+ fixed=one(fixed,oldCatch,newCatch,"probe fetch failure");
+ fixed=one(fixed,"if(httpStatus===404&&retryTv360Resolver(c,cand,gen,'HLS HTTP 404'))return;","if((httpStatus===404||httpStatus===408||httpStatus===429||httpStatus>=500)&&retryTv360Resolver(c,cand,gen,'HLS HTTP '+httpStatus))return;","HLS HTTP failure");
+ return fixed+"\n/*"+marker+"*/\n";
+}
 async function liveOverlayScriptResponse(response){
  if(!response||!response.ok)return response;
  let fixed=await response.text();
+ try{fixed=patchTv360RuntimeSource(fixed)}catch(e){return new Response('TV360 runtime patch failed: '+String(e&&e.message||e),{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}})}
  const liveClassMarker="S.livePlaybackContext?'live-playback':''";
  if(!fixed.includes(liveClassMarker)){
   if(!LIVE_PLAYER_INIT_RE.test(fixed))return new Response('LIVE overlay promotion failed: could not locate the tested player initialization.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
