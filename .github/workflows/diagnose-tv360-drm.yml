@@ -194,3 +194,63 @@ jobs:
                     'kind=unparseable','error='+type(e).__name__)
           PY
           done
+
+
+      - name: Compare TV360 event KIDs across existing playlist feeds
+        shell: bash
+        run: |
+          set -u
+          i=0
+          while IFS='|' read -r label url; do
+            [ -n "$url" ] || continue
+            i=$((i+1))
+            code="$(curl --retry 1 --retry-all-errors --retry-delay 1 -sS -L --max-time 30 -A 'Dalvik/2.1.0' -o "/tmp/tv360-feed-$i.m3u" -w '%{http_code}' "$url" || true)"
+            echo "FEED_CHECK name=$label http=$code bytes=$(wc -c < "/tmp/tv360-feed-$i.m3u" 2>/dev/null || echo 0)"
+            python3 - "$label" "/tmp/tv360-feed-$i.m3u" <<'PY'
+          import re,sys
+          from urllib.parse import urlsplit
+          label,path=sys.argv[1:]
+          try: lines=open(path,encoding='utf-8',errors='replace').read().splitlines()
+          except OSError: raise SystemExit(0)
+          wanted={'41ce0eac12eb58f69607df0d2eaff649','fa4033841a70511c84a7fe7e0daf1a6a','856f291af35a5db7b7d0c944b32993b9','c305b22dfd6d55e3998ab279cc98e0d3'}
+          entry=None;hits=0
+          def emit(e):
+              global hits
+              if not e:return
+              name=e.get('name','');group=e.get('group','');kid=e.get('kid','').replace('-','').lower()
+              is_tv360='tv360' in group.lower() or re.search(r'tv360\s*\+\s*\d{1,2}',name,re.I) or re.search(r'tv360plus\s*\d{1,2}',name,re.I)
+              if not (is_tv360 or kid in wanted):return
+              host=pathpart=''
+              try:
+                  u=urlsplit(e.get('url',''));host=u.hostname or '';pathpart=u.path or ''
+              except Exception:pass
+              safe_name=re.sub(r'\s+',' ',name)[:120]
+              print('SOURCE_ENTRY feed='+label,'group='+re.sub(r'\s+',' ',group)[:50],
+                    'name='+safe_name,'kid='+(kid or 'none'),
+                    'host='+(host or 'none'),'path='+(pathpart or 'none'))
+              hits+=1
+          for line in lines:
+              line=line.strip()
+              if line.startswith('#EXTINF:'):
+                  emit(entry)
+                  header=line.split(',',1)[0]
+                  name=line.split(',',1)[1].strip() if ',' in line else ''
+                  entry={'name':name,'group':(re.search(r'group-title="([^"]*)"',header,re.I) or [None,''])[1],
+                         'tvgid':(re.search(r'tvg-id="([^"]*)"',header,re.I) or [None,''])[1],
+                         'url':'','kid':'','manifest':''}
+              elif entry and line.startswith('#KODIPROP:'):
+                  m=re.search(r'license_key=(.+)',line,re.I)
+                  if m:entry['kid']=m.group(1).strip().split(':',1)[0]
+                  m=re.search(r'manifest_type=(.+)',line,re.I)
+                  if m:entry['manifest']=m.group(1).strip()
+              elif entry and line and not line.startswith('#') and line.startswith(('http://','https://')):
+                  entry['url']=line.split('|',1)[0]
+                  emit(entry);entry=None
+          emit(entry)
+          PY
+          done <<'FEEDS'
+          vmttv-custom|https://raw.githubusercontent.com/vuminhthanh12/vuminhthanh12/refs/heads/main/vmttv
+          nm7-vapp-playlist|https://raw.githubusercontent.com/phuongnm7/Iptv-phuongnm7/main/IPTV_Gop_VMTTV_vAppTV.m3u
+          iptv-live-merge|https://iptv-live-merge.phuongnm7-iptv.workers.dev/playlist.m3u
+          phuongnm7-playlist|https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/
+          FEEDS
