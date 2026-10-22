@@ -1490,6 +1490,10 @@ function patchTv360RuntimeSource(fixed) {
  const marker="NM7_TV360_RUNTIME_RECOVERY_PATCH_20261022";
  if(fixed.includes(marker))return fixed;
  function one(src,from,to,label){const n=src.split(from).length-1;if(n!==1)throw new Error(label+": expected 1 match, got "+n);return src.replace(from,to)}
+ const oldCacheSchema="var CACHE_SCHEMA='20261009-vietmitv-defaults-2';";
+ const newCacheSchema="var CACHE_SCHEMA='20261022-tv360-probe-recovery1';";
+ if(fixed.includes(oldCacheSchema))fixed=one(fixed,oldCacheSchema,newCacheSchema,"invalidate stale channel cache");
+ else if(!fixed.includes(newCacheSchema))throw new Error("Unrecognized channel cache schema; refuse to serve stale playlist candidates");
  const toHex=String.raw`function toHex16(v){
  // Keep Base64URL '-'/'_' intact until after the hexadecimal/UUID check.
  // Removing '-' from Base64URL first corrupts valid 128-bit ClearKey values.
