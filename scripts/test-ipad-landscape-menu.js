@@ -24,7 +24,7 @@ for (const file of appFiles) {
 }
 
 const html = fs.readFileSync('web-tv/index.html', 'utf8');
-assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2'),
+assert.ok(html.includes('app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load1'),
   'index.html must request the updated active Safari policy script');
 assert.ok(html.includes('body.mobile-mode #mobileMenuBtn{display:flex;align-items:center;justify-content:center;flex:0 0 46px}'),
   'mobile-mode hamburger button must be visible');
@@ -34,7 +34,7 @@ assert.ok(html.includes('body.mobile-mode #homeTabs{display:flex}'),
 const workflow = fs.readFileSync('.github/workflows/cloudflare-deploy.yml', 'utf8');
 assert.ok(workflow.includes('node scripts/test-ipad-landscape-menu.js'),
   'Cloudflare workflow must run the iPad landscape menu regression test');
-assert.ok(workflow.includes('app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2'),
+assert.ok(workflow.includes('app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load1'),
   'production smoke test must request the active mobile runtime asset');
 assert.ok(workflow.includes('Smoke test PC player click opens controls and auto-hides player UI'),
   'desktop player regression smoke must remain enabled');
