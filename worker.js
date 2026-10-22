@@ -53,7 +53,7 @@ function enrichChannels(channels){
         }catch{}
       }
     }
-    c.candidates.sort((a,b)=>(Number(!!b.tv360EventFeed)-Number(!!a.tv360EventFeed))||(score(String(b.url||''))-score(String(a.url||''))));
+    c.candidates.sort((a,b)=>score(String(b.url||''))-score(String(a.url||'')));
   }
   return out
 }
@@ -71,7 +71,7 @@ function parseM3U(t,base=''){
   finish();
   const merged=[],byKey=new Map();
   for(const c of out){c.id=c.id||c.name;const gid=String(c.id||'').toLowerCase().trim(),nameKey=String(c.name||'').toLowerCase().replace(/\b(server|source|nguon)\s*\d+\b/g,'').replace(/[^a-z0-9]+/g,' ').trim(),key=(c.group||'')+'|'+(gid||nameKey);if(!byKey.has(key)){byKey.set(key,{...c,candidates:c.candidates.slice()});merged.push(byKey.get(key))}else{const x=byKey.get(key),seen=new Set(x.candidates.map(v=>v.url));for(const v of c.candidates)if(v.url&&!seen.has(v.url)){x.candidates.push(v);seen.add(v.url)}if(!x.logo&&c.logo)x.logo=c.logo}}
-  for(const c of merged){addBuiltin(c);c.candidates.sort((a,b)=>(Number(!!b.tv360EventFeed)-Number(!!a.tv360EventFeed))||(score(String(b.url||''))-score(String(a.url||''))))}
+  for(const c of merged){addBuiltin(c);c.candidates.sort((a,b)=>score(b.url)-score(a.url))}
   return merged;
 }
 function isStalkerPlaybackUrl(value){
@@ -209,74 +209,132 @@ async function fetchPlaylistTarget(target,init={},env=null,ms=10000){
   }
   return fetchWithTimeout(target,init,ms);
 }
-function mergeTv360EventKeys(channels,eventChannels){
-  const channelNumber=(channel)=>{
-    const values=[channel&&channel.name,channel&&channel.id,channel&&channel.tvgId];
-    const patterns=[/(?:k[eê]nh\s*)?tv360\s*\+\s*(\d{1,2})/i,/\btv360plus\s*(\d{1,2})\b/i,/\btv360-(\d{1,2})\b/i];
-    for(const value of values){const text=String(value||'');for(const pattern of patterns){const match=pattern.exec(text);if(match)return Number(match[1])||0}}
-    return 0;
-  };
-  const is16Bytes=(value)=>{
-    const text=String(value||'').trim().replace(/^["']|["']$/g,'');
-    if(/^[0-9a-f]{32}$/i.test(text))return true;
-    if(!/^[A-Za-z0-9_+\/-]{22,24}={0,2}$/.test(text))return false;
-    try{let encoded=text.replace(/-/g,'+').replace(/_/g,'/');encoded+='='.repeat((4-encoded.length%4)%4);return atob(encoded).length===16}catch{return false}
-  };
-  const validClearKey=(value)=>{
-    const text=String(value||'').trim();if(!text||/^https?:\/\//i.test(text))return false;
-    const validPair=(kid,key)=>is16Bytes(kid)&&is16Bytes(key);
-    if(text[0]==='{'){
-      try{
-        const data=JSON.parse(text);
-        if(Array.isArray(data.keys))return data.keys.some(entry=>entry&&validPair(entry.kid||entry.keyId,entry.k||entry.key));
-        if(data.keys&&typeof data.keys==='object')return Object.keys(data.keys).some(kid=>validPair(kid,data.keys[kid]));
-        if(data.kid&&(data.k||data.key))return validPair(data.kid,data.k||data.key);
-      }catch{}
-      return false;
+function normalizeClearKeyKid(value){
+  const text=String(value||'').trim().replace(/^["']|["']$/g,'');
+  const rawHex=text.replace(/-/g,'');
+  if(/^[0-9a-f]{32}$/i.test(rawHex))return rawHex.toLowerCase();
+  try{
+    let encoded=text.replace(/-/g,'+').replace(/_/g,'/');
+    encoded+='='.repeat((4-encoded.length%4)%4);
+    const bytes=atob(encoded);
+    if(bytes.length===16){let hex='';for(let i=0;i<bytes.length;i++)hex+=('0'+bytes.charCodeAt(i).toString(16)).slice(-2);return hex}
+  }catch{}
+  return '';
+}
+function clearKeyKidIds(value){
+  const out=new Set(),text=String(value||'').trim();
+  const add=(kid)=>{const normalized=normalizeClearKeyKid(kid);if(normalized)out.add(normalized)};
+  if(text.startsWith('{')){
+    try{
+      const data=JSON.parse(text);
+      if(Array.isArray(data.keys))for(const item of data.keys)if(item)add(item.kid||item.keyId);
+      else if(data.keys&&typeof data.keys==='object')for(const kid of Object.keys(data.keys))add(kid);
+      if(data.kid)add(data.kid);
+    }catch{}
+  }else{
+    for(const part of text.split(/[;,\s]+/)){
+      const index=part.indexOf(':');
+      if(index>0&&part.indexOf(':',index+1)<0)add(part.slice(0,index));
+      const match=/\bkid\s*=\s*([^&;,\s]+)/i.exec(part);
+      if(match)add(match[1]);
     }
-    for(const part of text.split(/[;,\s]+/)){const index=part.indexOf(':');if(index>0&&part.indexOf(':',index+1)<0&&validPair(part.slice(0,index),part.slice(index+1)))return true}
-    return false;
-  };
+  }
+  return out;
+}
+function dashManifestKidIds(text){
+  const out=new Set(),source=String(text||'');
+  const regex=/(?:cenc:)?default_KID\s*=\s*["']([^"']+)["']/gi;
+  let match;while((match=regex.exec(source))!==null){
+    const normalized=normalizeClearKeyKid(match[1]);if(normalized)out.add(normalized);
+  }
+  return out;
+}
+function tv360ChannelNumber(channel){
+  const values=[channel&&channel.name,channel&&channel.id,channel&&channel.tvgId];
+  const patterns=[/(?:k[eê]nh\s*)?tv360\s*\+\s*(\d{1,2})/i,/\btv360plus\s*(\d{1,2})\b/i,/\btv360-(\d{1,2})\b/i];
+  for(const value of values){const text=String(value||'');for(const pattern of patterns){const match=pattern.exec(text);if(match)return Number(match[1])||0}}
+  return 0;
+}
+async function probeTv360ResolverKids(channels,eventChannels){
   const activeByNumber=new Map();
   for(const eventChannel of Array.isArray(eventChannels)?eventChannels:[]){
     if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
-    const number=channelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
+    const number=tv360ChannelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
     const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
-      candidate&&candidate.url&&isHttp(candidate.url)&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&validClearKey(candidate.drm.key)&&
+      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&clearKeyKidIds(candidate.drm.key).size&&
+      (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
+    if(eventCandidate)activeByNumber.set(number,eventCandidate);
+  }
+  const probes=[],seen=new Set();
+  for(const channel of Array.isArray(channels)?channels:[]){
+    if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
+    const eventCandidate=activeByNumber.get(tv360ChannelNumber(channel));
+    if(!eventCandidate)continue;
+    const eventKids=clearKeyKidIds(eventCandidate.drm.key);
+    for(const candidate of Array.isArray(channel.candidates)?channel.candidates:[]){
+      let isResolver=false;
+      try{const url=new URL(String(candidate&&candidate.url||''));isResolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
+      if(!isResolver)continue;
+      const url=String(candidate.url||'');
+      if(!url||seen.has(url))continue;
+      const existingKids=clearKeyKidIds(candidate.drm&&candidate.drm.key);
+      if([...eventKids].some(kid=>existingKids.has(kid)))continue;
+      seen.add(url);
+      probes.push((async()=>{
+        try{
+          const headers=new Headers({'Accept':'application/dash+xml,application/xml,text/xml,*/*'});
+          headers.set('User-Agent',String(candidate.ua||'Dalvik/2.1.0'));
+          if(candidate.ref)headers.set('Referer',String(candidate.ref));
+          for(const [name,value] of Object.entries(candidate.headers||{})){
+            if(typeof value!=='string'||!value.trim())continue;
+            const key=name.toLowerCase();
+            if(['host','connection','content-length','user-agent','referer'].includes(key))continue;
+            try{headers.set(name,value)}catch{}
+          }
+          const response=await fetchWithTimeout(url,{headers,redirect:'follow'},6500);
+          if(!response.ok)return [url,new Set()];
+          const body=await response.text();
+          if(!/<MPD\b/i.test(body))return [url,new Set()];
+          return [url,dashManifestKidIds(body)];
+        }catch{return [url,new Set()]}
+      })());
+    }
+  }
+  const result=new Map();
+  const settled=await Promise.all(probes);
+  for(const [url,kids] of settled)result.set(url,kids);
+  return result;
+}
+function mergeTv360EventKeys(channels,eventChannels,manifestKidsByUrl){
+  const activeByNumber=new Map();
+  for(const eventChannel of Array.isArray(eventChannels)?eventChannels:[]){
+    if(!/tv360/i.test(String(eventChannel&&eventChannel.group||'')))continue;
+    const number=tv360ChannelNumber(eventChannel);if(!number||activeByNumber.has(number))continue;
+    const eventCandidate=(Array.isArray(eventChannel.candidates)?eventChannel.candidates:[]).find(candidate=>
+      candidate&&candidate.drm&&/clearkey/i.test(String(candidate.drm.type||''))&&clearKeyKidIds(candidate.drm.key).size&&
       (candidate.dash||String(candidate.type||'').toLowerCase()==='dash'));
     if(eventCandidate)activeByNumber.set(number,eventCandidate);
   }
   let updated=0;
   for(const channel of Array.isArray(channels)?channels:[]){
     if(!/tv360/i.test(String(channel&&channel.group||'')))continue;
-    const number=channelNumber(channel),eventCandidate=activeByNumber.get(number);
-    if(!number||!eventCandidate||!Array.isArray(channel.candidates))continue;
-    const eventUrl=String(eventCandidate.url||'');
-    let matching=channel.candidates.find(candidate=>String(candidate&&candidate.url||'')===eventUrl);
-    if(!matching){
-      // Pair the active event's own media endpoint with the ClearKey KID from
-      // that same M3U entry. A generic TV360+N resolver can rotate/remap to a
-      // different live event while its KID stays unrelated to this event key.
-      matching={
-        ...eventCandidate,
-        headers:{...(eventCandidate.headers||{})},
-        drm:{type:'clearkey',key:eventCandidate.drm.key},
-        type:'dash',dash:true,hls:false,
-        forceProxy:true,
-        ua:String(eventCandidate.ua||'Dalvik/2.1.0'),
-        tv360EventFeed:true
-      };
-      channel.candidates.unshift(matching);
-      updated++;
-    }else{
-      matching.drm={type:'clearkey',key:eventCandidate.drm.key};
-      matching.type='dash';matching.dash=true;matching.hls=false;
-      matching.forceProxy=true;matching.tv360EventFeed=true;
-      if(!matching.ua)matching.ua=String(eventCandidate.ua||'Dalvik/2.1.0');
-      updated++;
+    const eventCandidate=activeByNumber.get(tv360ChannelNumber(channel));
+    if(!eventCandidate||!Array.isArray(channel.candidates))continue;
+    const eventKids=clearKeyKidIds(eventCandidate.drm.key);
+    for(const candidate of channel.candidates){
+      let isResolver=false;
+      try{const url=new URL(String(candidate&&candidate.url||''));isResolver=url.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(url.pathname)}catch{}
+      if(!isResolver)continue;
+      const existingKids=clearKeyKidIds(candidate.drm&&candidate.drm.key);
+      if([...eventKids].some(kid=>existingKids.has(kid)))continue;
+      const manifestKids=manifestKidsByUrl&&manifestKidsByUrl.get(String(candidate.url||''));
+      // Only copy a live event's ClearKey onto a resolver when the resolver's
+      // current MPD advertises that same KID. Dynamic TV360 IDs can be remapped;
+      // blindly merging a stale event key makes valid DRM channels fail.
+      if(!manifestKids||![...eventKids].some(kid=>manifestKids.has(kid)))continue;
+      candidate.drm={type:'clearkey',key:eventCandidate.drm.key};
+      candidate.dash=true;candidate.type='dash';updated++;
     }
-    // Keep resolver candidates as fallbacks, but do not transfer this event
-    // feed's key onto them: they can resolve to a different live-event KID.
   }
   return updated;
 }
@@ -290,7 +348,8 @@ async function refreshTv360EventKeys(channels){
       if(!eventChannels.length)throw new Error('event key feed empty');
       tv360EventKeyCache={time:now,channels:eventChannels};
     }
-    const updated=mergeTv360EventKeys(channels,tv360EventKeyCache.channels);
+    const manifestKidsByUrl=await probeTv360ResolverKids(channels,tv360EventKeyCache.channels);
+    const updated=mergeTv360EventKeys(channels,tv360EventKeyCache.channels,manifestKidsByUrl);
     return {status:updated?'applied':'no-current-event-match',updated};
   }catch{return {status:'unavailable',updated:0}}
 }
