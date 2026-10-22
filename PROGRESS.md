@@ -1,13 +1,15 @@
-## 2026-10-22 — Nghiên cứu APK Watch và tích hợp lịch EPG trên nhánh thử nghiệm
+## 2026-10-22 — APK Watch nghiên cứu, EPG NM7 TV Web đã merge/deploy
 
-- Nguồn tham khảo: /mnt/data/watch.apk — gói Android com.tieume.launchpadtv.watch, phiên bản 1.0.1 (versionCode 29), triển khai bằng Kotlin/Jetpack Compose; thấy các lớp EpgRepository, XmltvParser, EpgStore và EpgSchedule. Đây là phân tích cấu trúc/DEX và chuỗi, không phải mã nguồn gốc giải ngược hoàn chỉnh.
-- Các điểm đáng học hỏi: lịch XMLTV có channel/programme; ghép TVG-ID rồi fallback TVG-name/tên đã chuẩn hóa; các trạng thái chương trình đã qua/đang phát/sắp phát; tiến độ, thời gian còn lại; lịch trong ngày và cache gzip/persist; kiểm tra tệp XMLTV hoàn chỉnh, báo lỗi khi không khớp kênh.
-- Nhánh mới: feature/epg-tv-guide-20261022 từ main. Chưa merge/deploy production.
-- Đã thêm web-tv/epg-core.js, web-tv/tv-guide.html, web-tv/tv-guide.js và Worker route /api/epg. Parser hỗ trợ dấu giờ XMLTV có múi giờ; API hỗ trợ XML/XML.GZ, kiểm tra URL/redirect, giới hạn dữ liệu và cache. Bộ phân tích playlist giữ metadata url-tvg/x-tvg-url và tvg-name.
-- Nối vào menu của 4 runtime Web. Từ lịch có thể mở đúng kênh theo ID/tên khi quay lại NM7; yêu cầu chuyển kênh tồn tại tối đa 120 giây trong localStorage. Không thay đổi repo NM7 TV Android hoặc NM7 Mobile.
-- Đã bổ sung scripts/test-epg-core.js, scripts/test-epg-guide.js và kiểm tra bước deploy/smoke vào .github/workflows/cloudflare-deploy.yml.
-- Cần kiểm chứng trước khi phát hành: chạy tất cả node --check và regression scripts trên runner, xác nhận endpoint XMLTV + redirect/private-URL rejection, xác nhận dữ liệu lịch thực khớp kênh. Nếu playlist không khai báo nguồn XMLTV, trang lịch gợi ý feed FreeEPG Việt Nam (225 kênh được liệt kê, trạng thái cập nhật theo ngày); CI kiểm tra feed gzip, kích thước XML và số chương trình trước khi phát hành. Vẫn cần xác minh tỷ lệ ghép thật với playlist NM7.
-- Production đang tiếp tục chạy bản TV360 đã xác minh tại mốc trước; thay đổi EPG trên nhánh này chưa được triển khai.
+- Phân tích APK `watch.apk`: gói `com.tieume.launchpadtv.watch`, phiên bản 1.0.1 (versionCode 29), Kotlin/Jetpack Compose. Xác định các lớp `EpgRepository`, `XmltvParser`, `EpgStore`, `EpgSchedule`, mô hình XMLTV, ghép ID/tên kênh, trạng thái PAST/LIVE/NEXT, tiến độ, thời gian còn lại và cache gzip. Đây là phân tích DEX/cấu trúc, không phải giải ngược hoàn chỉnh mã nguồn gốc.
+- PR [#22](https://github.com/cnktvpc/nm7-tv-web/pull/22) đã merge vào `main` (merge commit `38213b46ef1caa60bac3ac8c4c5dcabe2f788820`).
+- Cloudflare xác nhận Worker rollout 100%: deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320`, version 487 (`41163598-cd20-4ea4-aea9-9159d4cd0e32`), tạo 2026-10-22 00:06:25 UTC.
+- Trang lịch production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/tv-guide.html
+- Các tệp chính: `web-tv/epg-core.js`, `web-tv/tv-guide.html`, `web-tv/tv-guide.js`, Worker route `/api/epg`. API kiểm tra URL/redirect, giới hạn thời gian và kích thước, hỗ trợ XMLTV/XMLTV.GZ, kiểm tra root XMLTV và cache. UI có hiện tại/kế tiếp, tiến độ, ngày trước/sau, xem chi tiết, lọc nhóm/tìm kiếm và nút trở lại kênh trong player.
+- Đã nối menu/handoff vào bốn runtime Web, giữ metadata `url-tvg`/`x-tvg-url`/`tvg-name`; logic LIVE/TV360 không được thay đổi chức năng. Không sửa repo NM7 TV Android hoặc NM7 Mobile.
+- **Kiểm thử PR PASS:** `Validate NM7 EPG Guide`; tất cả EPG/parser/security/channel matching; feed smoke tại thời điểm test trả 516 kênh / 28.623 chương trình; `Web Browser Validation`; LIVE player metadata; TV360 routing; production manifest smoke; browser remote + HLS E2E.
+- Đã bổ sung bước production smoke để xác minh endpoint `/api/epg` trả XMLTV hợp lệ cùng kiểm tra từ chối URL nội bộ. Cloudflare control plane đã xác nhận rollout; tuy nhiên môi trường hiện tại không cho gọi HTTP trực tiếp tới hostname `.workers.dev`, nên chưa thể thu ảnh/chạy thao tác UI trực tiếp trên trình duyệt người dùng. Cần xác nhận trải nghiệm thực tế trên PC/iPad/TV.
+- Phạm vi: NM7 TV Web/Cloudflare. NM7 TV Android và NM7 Mobile giữ nguyên.
+
 
 ---
 
