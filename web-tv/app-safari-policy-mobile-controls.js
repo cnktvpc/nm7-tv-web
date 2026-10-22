@@ -9,7 +9,6 @@ var PLAYLISTS={
 
 // Initial TV preset: Android and Windows use preset 2; iOS/iPadOS and other platforms use preset 1.
 function detectDefaultTvPreset(){
- try{var guidePending=JSON.parse(localStorage.getItem('nm7:guide:open')||'null'),guideAt=Number(guidePending&&guidePending.at||0);if(guidePending&&guideAt&&Date.now()>=guideAt&&Date.now()-guideAt<=120000&&(Number(guidePending.preset)===1||Number(guidePending.preset)===2))return Number(guidePending.preset)}catch(e){}
  var ua='',platform='',uaDataPlatform='',touchPoints=0;
  try{
   if(typeof navigator!=='undefined'){
@@ -123,37 +122,6 @@ function norm(c){
  return c
 }
 
-function rememberEpgUrl(value){
- try{
-  var u=String(value||'').trim(),parsed=new URL(u);
-  if((parsed.protocol==='http:'||parsed.protocol==='https:')&&!parsed.username&&!parsed.password&&u.length<4096)localStorage.setItem('nm7:epgUrl',u);
- }catch(e){}
-}
-function guideNameKey(value){
- return String(value||'').replace(/[đĐ]/g,'d').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
-}
-function openPendingGuideChannel(){
- var pending=null;
- try{pending=JSON.parse(localStorage.getItem('nm7:guide:open')||'null')}catch(e){}
- if(!pending)return false;
- var now=Date.now(),created=Number(pending.at||0);
- if(!created||now<created||now-created>120000){try{localStorage.removeItem('nm7:guide:open')}catch(e){}return false}
- if(!Array.isArray(S.list)||!S.list.length)return false;
- var wantedId=String(pending.id||'').toLowerCase(),wantedName=guideNameKey(pending.name||''),wantedGroup=String(pending.group||''),found=null,i,c;
- if(wantedId){
-  for(i=0;i<S.list.length;i++){c=S.list[i]||{};if(String(c.id||'').toLowerCase()===wantedId&&(!wantedGroup||String(c.group||'')===wantedGroup)){found=c;break}}
-  if(!found)for(i=0;i<S.list.length;i++){c=S.list[i]||{};if(String(c.id||'').toLowerCase()===wantedId){found=c;break}}
- }
- if(!found&&wantedName){
-  for(i=0;i<S.list.length;i++){c=S.list[i]||{};if(guideNameKey(c.name||'')===wantedName&&(!wantedGroup||String(c.group||'')===wantedGroup)){found=c;break}}
-  if(!found)for(i=0;i<S.list.length;i++){c=S.list[i]||{};if(guideNameKey(c.name||'')===wantedName){found=c;break}}
- }
- try{localStorage.removeItem('nm7:guide:open')}catch(e){}
- if(!found){toast('Không tìm thấy kênh lịch trong playlist đang tải.');return false}
- if(Number(pending.preset)===2)S.tvPreset=2;else if(Number(pending.preset)===1)S.tvPreset=1;
- setTimeout(function(){if(!S.player)openPlayer(found)},120);
- return true;
-}
 function isTv360ResolverUrl(value){try{var u=new URL(String(value||''));return u.hostname.toLowerCase()==='vmttv.dpdns.org'&&/^\/tv360\/?$/i.test(u.pathname)}catch(e){return false}}
 function parseM3U(text,base){
  var lines=String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/),out=[],m=null,ua='',ref='',origin='',headers={},manifest='',licenseType='',licenseKey='',epg='';
@@ -169,7 +137,7 @@ function parseM3U(text,base){
   if(l.indexOf('#EXTINF:')===0){
    finish();
    p=l.indexOf(',');h=p<0?l:l.slice(0,p);
-   m={name:p<0?'Kênh':l.slice(p+1).trim(),group:(/group-title="([^"]*)"/i.exec(h)||[])[1]||'Khác',logo:(/tvg-logo="([^"]*)"/i.exec(h)||[])[1]||'',id:(/tvg-id="([^"]*)"/i.exec(h)||[])[1]||'',tvgName:(/tvg-name="([^"]*)"/i.exec(h)||[])[1]||'',candidates:[],catchup:(/catchup="([^"]*)"/i.exec(h)||[])[1]||'',catchupDays:(/catchup-days="([^"]*)"/i.exec(h)||[])[1]||'',catchupSource:(/catchup-source="([^"]*)"/i.exec(h)||[])[1]||''};
+   m={name:p<0?'Kênh':l.slice(p+1).trim(),group:(/group-title="([^"]*)"/i.exec(h)||[])[1]||'Khác',logo:(/tvg-logo="([^"]*)"/i.exec(h)||[])[1]||'',id:(/tvg-id="([^"]*)"/i.exec(h)||[])[1]||'',candidates:[],catchup:(/catchup="([^"]*)"/i.exec(h)||[])[1]||'',catchupDays:(/catchup-days="([^"]*)"/i.exec(h)||[])[1]||'',catchupSource:(/catchup-source="([^"]*)"/i.exec(h)||[])[1]||''};
    ua='';ref='';origin='';headers={};manifest='';licenseType='';licenseKey='';
    continue
   }
@@ -436,11 +404,40 @@ function focusHome(initial){
  var a=channelsInGroup(S.groups[S.row]||'');if(!a.length){rebuildGroups();a=channelsInGroup(S.groups[S.row]||'')}
  setFocusCard(S.row,S.col,!!initial)
 }
+var logoActivationScheduled=false,logoScrollActivationBound=false,logoResizeActivationBound=false;
+function scheduleLogoActivation(){
+ if(logoActivationScheduled)return;
+ logoActivationScheduled=true;
+ var run=function(){logoActivationScheduled=false;activateLogos()};
+ if(typeof window.requestAnimationFrame==='function')window.requestAnimationFrame(run);
+ else setTimeout(run,16);
+}
+function bindLogoActivationEvents(){
+ var rows=$('homeRows');
+ if(rows&&!logoScrollActivationBound&&rows.addEventListener){
+  rows.addEventListener('scroll',scheduleLogoActivation,{passive:true});
+  logoScrollActivationBound=true;
+ }
+ if(!logoResizeActivationBound&&window.addEventListener){
+  window.addEventListener('resize',scheduleLogoActivation,{passive:true});
+  logoResizeActivationBound=true;
+ }
+}
 function activateLogos(){
+ bindLogoActivationEvents();
  var imgs=document.querySelectorAll('img[data-src]');
+ var rows=$('homeRows');
+ var bounds=rows&&rows.getBoundingClientRect?rows.getBoundingClientRect():{top:0,bottom:window.innerHeight||768,left:0,right:window.innerWidth||1024};
+ var height=Math.max(1,Number(bounds.bottom)-Number(bounds.top)||600);
+ var margin=Math.max(320,Math.round(height*.75));
  for(var i=0;i<imgs.length;i++){
-  var r=Number(imgs[i].dataset.row||0);
-  if(Math.abs(r-S.row)<=2){imgs[i].src=imgs[i].dataset.src;imgs[i].removeAttribute('data-src')}
+  var img=imgs[i],r=Number(img.dataset.row||0),nearViewport=false;
+  if(img.getBoundingClientRect){
+   var box=img.getBoundingClientRect();
+   nearViewport=Number(box.bottom)>=Number(bounds.top)-margin&&Number(box.top)<=Number(bounds.bottom)+margin&&Number(box.right)>=Number(bounds.left)&&Number(box.left)<=Number(bounds.right);
+  }
+  // Keep remote-navigation preloading, but also load logos around the actual scrolled viewport.
+  if(nearViewport||Math.abs(r-S.row)<=2){img.src=img.dataset.src;img.removeAttribute('data-src')}
  }
 }
 function logoOverride(c){
@@ -459,7 +456,7 @@ function logoSource(c){
 }
 
 function renderMenu(){
- var labels=['⌂  Trang chính','▶  YouTube gốc · AdBlock','⌕  Tìm kiếm kênh','TV  Tất cả các kênh','▣  Truyền hình','⚽  Thể thao','★  Yêu thích','◷  Gần đây','+  Thêm nguồn','☷  Chỉnh sửa nguồn','↻  Tải lại nguồn','▣  Bản tin · Highlights / Xem lại','⚽  LIVE · Sự kiện đang phát','▤  Lịch phát sóng · EPG'];
+ var labels=['⌂  Trang chính','▶  YouTube gốc · AdBlock','⌕  Tìm kiếm kênh','TV  Tất cả các kênh','▣  Truyền hình','⚽  Thể thao','★  Yêu thích','◷  Gần đây','+  Thêm nguồn','☷  Chỉnh sửa nguồn','↻  Tải lại nguồn','▣  Bản tin · Highlights / Xem lại','⚽  LIVE · Sự kiện đang phát'];
  var menu=$('sideList'),html='';
  for(var i=0;i<labels.length;i++)html+='<button class="menuBtn" type="button" tabindex="'+(i===S.menu?'0':'-1')+'" data-menu="'+i+'">'+labels[i]+'</button>';
  menu.innerHTML=html;
@@ -491,7 +488,6 @@ function selectMenu(){
  if(p===7){showSubset('recent');return}
  if(p===8){showAddSource();return}
  if(p===9){showSources();return}
- if(p===13){location.href='/tv-guide.html';return}
  if(p===11){location.href='/ban-tin.html';return}
   if(p===10){
   closeMenu();
@@ -550,7 +546,7 @@ function readLocalFileText(file){
 function applyLocalM3U(text,name,message){
  var p=parseM3U(text,'');
  if(!p.channels.length)throw new Error('Tệp M3U không có kênh hợp lệ hoặc chỉ chứa URL tương đối');
- if(p.epgUrl)rememberEpgUrl(p.epgUrl);S.source='local-m3u';S.localM3uText=String(text||'');S.localM3uName=String(name||'playlist.m3u');S.list=p.channels.map(norm);S.query='';S.row=0;S.col=0;rebuildGroups();renderHome();S.loading=false;saveCache();if(message)toast(message);else toast('Đã mở '+S.localM3uName+' · '+S.list.length+' kênh')
+ S.source='local-m3u';S.localM3uText=String(text||'');S.localM3uName=String(name||'playlist.m3u');S.list=p.channels.map(norm);S.query='';S.row=0;S.col=0;rebuildGroups();renderHome();S.loading=false;saveCache();if(message)toast(message);else toast('Đã mở '+S.localM3uName+' · '+S.list.length+' kênh')
 }
 function loadLocalM3UFile(file,onSuccess){
  var name=String(file&&file.name||'');
@@ -591,7 +587,7 @@ function loadCustom(url){
  var api='/api/source?u='+encodeURIComponent(url);
  fetch(api,{cache:'no-store'}).then(function(r){return r.json().catch(function(){return {error:'HTTP '+r.status}}).then(function(d){if(!r.ok)throw new Error(d&&d.error||'HTTP '+r.status);return d})}).then(function(d){
   if(!d||!Array.isArray(d.channels)||!d.channels.length)throw new Error(d&&d.error||'Playlist rỗng');
-  if(d.epgUrl)rememberEpgUrl(d.epgUrl);S.list=d.channels.map(norm);S.query='';S.row=0;S.col=0;rebuildGroups();renderHome();S.loading=false;saveCache();toast('Đã tải '+S.list.length+' kênh')
+  S.list=d.channels.map(norm);S.query='';S.row=0;S.col=0;rebuildGroups();renderHome();S.loading=false;saveCache();toast('Đã tải '+S.list.length+' kênh')
  }).catch(function(e){S.loading=false;toast('Không tải được nguồn: '+e.message)})
 }
 function fetchJsonTimeout(url,ms){
@@ -604,7 +600,7 @@ function fetchJsonTimeout(url,ms){
 function applyPlaylist(d,source,message){
  if(!d||!Array.isArray(d.channels)||!d.channels.length)throw new Error('playlist response không hợp lệ');
  if(source!==S.source)return false;
- if(d.epgUrl)rememberEpgUrl(d.epgUrl);S.list=d.channels.map(norm);S.row=0;S.col=0;rebuildGroups();renderHome();S.loading=false;saveCache();if(message)toast(message);openPendingGuideChannel();return true
+ S.list=d.channels.map(norm);S.row=0;S.col=0;rebuildGroups();renderHome();S.loading=false;saveCache();if(message)toast(message);return true
 }
 function loadSource(source,force,tvPreset){
  S.source=source;
@@ -638,8 +634,8 @@ function loadSource(source,force,tvPreset){
 function fallbackOriginal(cached,firstError){
  var u='https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/';
  fetch(u,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(t){
-  var p=parseM3U(t,u);if(!p.channels.length||!isAndroid1069DefaultList(p.channels))throw new Error('nguồn mặc định không đúng');if(p.epgUrl)rememberEpgUrl(p.epgUrl);
-  S.list=p.channels;S.row=0;S.col=0;rebuildGroups();renderHome();saveCache();openPendingGuideChannel();toast('Đã mở nguồn mặc định Android 1.0.69 · '+S.list.length+' kênh')
+  var p=parseM3U(t,u);if(!p.channels.length||!isAndroid1069DefaultList(p.channels))throw new Error('nguồn mặc định không đúng');
+  S.list=p.channels;S.row=0;S.col=0;rebuildGroups();renderHome();saveCache();toast('Đã mở nguồn mặc định Android 1.0.69 · '+S.list.length+' kênh')
  }).catch(function(e){
   if(cached&&cached.channels.length&&isAndroid1069DefaultList(cached.channels)){toast('Nguồn mới lỗi · giữ playlist 1.0.69')}
   else toast('Không tải được nguồn mặc định: '+(firstError&&firstError.message||e.message));
