@@ -1494,6 +1494,10 @@ function patchTv360RuntimeSource(fixed) {
  const newCacheSchema="var CACHE_SCHEMA='20261022-tv360-probe-recovery1';";
  if(fixed.includes(oldCacheSchema))fixed=one(fixed,oldCacheSchema,newCacheSchema,"invalidate stale channel cache");
  else if(!fixed.includes(newCacheSchema))throw new Error("Unrecognized channel cache schema; refuse to serve stale playlist candidates");
+ const oldGetter="function getCandidate(){return S.current&&S.current.candidates?normalizeCandidate(S.current.candidates[S.candidateIndex]):null}";
+ const safeGetter="function getCandidate(){\n var a=S.current&&Array.isArray(S.current.candidates)?S.current.candidates:[];\n if(!a.length)return null;\n var requested=Number(S.candidateIndex);\n if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;\n for(var offset=0;offset<a.length;offset++){\n  var i=(requested+offset)%a.length,c=a[i],u=String(c&&(c.resolvedUrl||c.url)||'').trim();\n  if(u&&u!=='undefined'&&u!=='null'&&u!=='NaN'){S.candidateIndex=i;return normalizeCandidate(c)}\n }\n return null\n}";
+ if(fixed.includes(oldGetter))fixed=one(fixed,oldGetter,safeGetter,'invalid candidate index guard');
+ else if(!fixed.includes('if(!Number.isInteger(requested)||requested<0||requested>=a.length)requested=0;'))throw new Error('Unrecognized candidate selector; refuse to probe undefined URL');
  const toHex=String.raw`function toHex16(v){
  // Keep Base64URL '-'/'_' intact until after the hexadecimal/UUID check.
  // Removing '-' from Base64URL first corrupts valid 128-bit ClearKey values.
