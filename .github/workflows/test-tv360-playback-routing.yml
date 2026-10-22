@@ -7,6 +7,7 @@ on:
       - 'worker.js'
       - 'web-tv/**'
       - 'scripts/test-tv360-playback-routing.js'
+      - 'scripts/test-tv360-live-key-overlay.js'
       - '.github/workflows/test-tv360-playback-routing.yml'
   workflow_dispatch:
 
@@ -31,5 +32,7 @@ jobs:
           node --check web-tv/app-safari-policy-pc-controls.js
       - name: TV360 routing regression
         run: node scripts/test-tv360-playback-routing.js
+      - name: TV360 live-event ClearKey metadata overlay regression
+        run: node scripts/test-tv360-live-key-overlay.js
       - name: Existing playback startup regression
         run: node scripts/test-playback-startup-fallback.js
