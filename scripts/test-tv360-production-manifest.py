@@ -143,6 +143,71 @@ def check_manifest(channel_id):
     fail(label + f": upstream/proxy returned HTTP {status} after bounded retries (content-type={content_type or 'unknown'}); see safe resolver diagnostic above")
 
 
+
+def check_dash_children(channel_id, body):
+    """Check that proxied DASH init and media-template resources are reachable."""
+    import xml.etree.ElementTree as ET
+    label = "TV360+" + channel_id
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as error:
+        fail(label + ": proxy DASH manifest is not valid XML (" + type(error).__name__ + ")")
+    ns = {"d": "urn:mpeg:dash:schema:mpd:2011"}
+    checked = 0
+    for aset in root.findall(".//d:AdaptationSet", ns):
+        reps = aset.findall("d:Representation", ns)
+        if not reps:
+            continue
+        for rep in reps[:1]:
+            template = rep.find("d:SegmentTemplate", ns)
+            if template is None:
+                template = aset.find("d:SegmentTemplate", ns)
+            if template is None:
+                continue
+            rid = rep.get("id", "")
+            time_value = "0"
+            timeline = template.find("d:SegmentTimeline", ns)
+            if timeline is None:
+                timeline = aset.find("d:SegmentTimeline", ns)
+            if timeline is not None:
+                entries = timeline.findall("d:S", ns)
+                if entries:
+                    last = entries[-1]
+                    if last.get("t") is not None:
+                        time_value = last.get("t")
+                    elif last.get("d") is not None:
+                        time_value = last.get("d")
+            number_value = template.get("startNumber", "1")
+            def expand(value):
+                if not value:
+                    return ""
+                def substitute(match):
+                    field, width = match.group(1), match.group(2)
+                    data = {"RepresentationID": rid, "Number": number_value,
+                            "Time": time_value, "Bandwidth": rep.get("bandwidth", "0")}.get(field, match.group(0))
+                    return data.zfill(int(width)) if width else data
+                return re.sub(r"\$(RepresentationID|Number|Time|Bandwidth)(?:%0(\d+)d)?\$", substitute, value)
+            for kind in ("initialization", "media"):
+                template_value = template.get(kind, "")
+                if not template_value:
+                    continue
+                uri = urljoin(BASE_URL + "/", expand(template_value))
+                last_result = None
+                for attempt in range(1, 4):
+                    last_result = http_get(uri, f"dash-{channel_id}-{kind}-{attempt}",
+                                           byte_range="bytes=0-1023", allow_http_errors=True)
+                    if last_result[0] in (200, 206) and last_result[2]:
+                        break
+                    if attempt < 3:
+                        time.sleep(attempt)
+                status, content_type, payload = last_result
+                if status not in (200, 206) or not payload:
+                    fail(label + f": DASH {kind} resource failed HTTP {status} after retries (content-type={content_type or 'unknown'})")
+                print(f"TV360_DASH_RESOURCE_OK channel={channel_id} kind={kind} http={status} bytes={len(payload)} content_type={content_type or 'unknown'}")
+                checked += 1
+    if checked < 2:
+        fail(label + ": manifest did not expose both DASH initialization and media templates through the proxy")
+
 def check_hls_child(body):
     next_uri = playlist_uri(body)
     if not next_uri:
@@ -175,6 +240,8 @@ def main():
         kind, body = check_manifest(channel_id)
         if channel_id == "10" and kind == "hls":
             check_hls_child(body)
+        if channel_id in ("13", "15") and kind == "dash":
+            check_dash_children(channel_id, body)
     print("TV360_PRODUCTION_MEDIA_SMOKE_OK")
 
 
