@@ -1164,3 +1164,11 @@ Chỉ sửa NM7 TV Web và triển khai qua Cloudflare Worker. Không thay đổ
 - Production deployment: Worker `nm7-tv-web`, deployment `b42df3e0-0d2f-4fb1-9ef4-8f99a6252ae1`, version `93b106c6-9dbc-4e34-94f7-888b5984fec7`, 100% traffic. `ASSETS`, playlist, and sports source bindings unchanged.
 - Regression workflow PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084780733. Browser validation PASS: https://github.com/cnktvpc/nm7-tv-web/actions/runs/39084788415.
 - The production Worker update is complete. User should hard refresh once; if the title remains, capture the served title after refreshing so the DOM state can be identified further.
+
+
+## 2026-10-22 — TV360 live-event ClearKey overlay candidate (not released)
+
+- Added `mergeTv360EventKeys()` / `refreshTv360EventKeys()` on branch `fix/tv360-probe-http-recovery-20261022`. It fetches the current event feed with a bounded timeout and 45-second isolate cache, validates 128-bit ClearKey pairs, matches TV360 channel numbers, and overlays metadata only onto the existing TV360 resolver candidate in the default TV playlist.
+- The patch does not change the playlist URL, channel order, resolver URL, proxy-first flag, per-channel User-Agent, or any non-TV360 DRM channel. It does not synthesize keys. Feed errors or invalid/unmatched metadata leave existing candidates unchanged.
+- Added fixture regression `scripts/test-tv360-live-key-overlay.js` and included it in `.github/workflows/test-tv360-playback-routing.yml`.
+- **Not deployed / not verified end-to-end:** CI run status is not yet confirmed; production Worker still needs safe deployment with existing bindings preserved; actual TV360+15 video/audio playback remains unconfirmed. Do not treat this candidate as released until those checks pass.
