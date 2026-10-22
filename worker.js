@@ -1497,7 +1497,7 @@ function patchTv360RuntimeSource(fixed) {
   fixed.includes("var upstreamStatus=Number(d&&d.status||0);")&&
   fixed.includes("if(S.tv360404RetryCount>=5)return false;")&&
   fixed.includes("Keep Base64URL '-'/'_' intact");
- if(runtimeAlreadyPatched)return fixed+"\\n/*"+marker+"*/\\n";
+ if(runtimeAlreadyPatched)return fixed+"\n/*"+marker+"*/\n";
  const oldCacheSchema="var CACHE_SCHEMA='20261009-vietmitv-defaults-2';";
  const newCacheSchema="var CACHE_SCHEMA='20261022-tv360-probe-recovery1';";
  if(fixed.includes(oldCacheSchema))fixed=one(fixed,oldCacheSchema,newCacheSchema,"invalidate stale channel cache");
