@@ -3,6 +3,7 @@
 import gzip
 import re
 import urllib.request
+from urllib.parse import urlparse
 
 URL = "https://free-epg.de/api/epg/vn.xml.gz"
 request = urllib.request.Request(
@@ -31,4 +32,4 @@ channels = len(re.findall(rb"<channel(?:\s|>)", xml, flags=re.I))
 programmes = len(re.findall(rb"<programme(?:\s|>)", xml, flags=re.I))
 if channels < 20 or programmes < 100:
     raise SystemExit(f"EPG_FEED_FAIL: unexpected data volume channels={channels} programmes={programmes}")
-print(f"EPG_FEED_SMOKE_OK urlHost={urllib.request.urlparse(final_url).hostname if hasattr(urllib.request, 'urlparse') else 'free-epg.de'} compressedBytes={len(compressed)} xmlBytes={len(xml)} channels={channels} programmes={programmes}")
+print(f"EPG_FEED_SMOKE_OK urlHost={urlparse(final_url).hostname} compressedBytes={len(compressed)} xmlBytes={len(xml)} channels={channels} programmes={programmes}")
