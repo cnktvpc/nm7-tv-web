@@ -109,7 +109,7 @@ assert.ok(safeUrlStart >= 0 && safeUrlEnd > safeUrlStart && dashHelpersStart >= 
 const dashHarness = vm.runInNewContext(
   '(function(){' + worker.slice(safeUrlStart, safeUrlEnd) + '\n' +
   worker.slice(dashHelpersStart, dashHelpersEnd) +
-  '\\nreturn {rewriteDash:rewriteDash,decodeDashContext:decodeDashContext};})()',
+  '\nreturn {rewriteDash:rewriteDash,decodeDashContext:decodeDashContext};})()',
   {
     URL, URLSearchParams, TextEncoder, TextDecoder,
     btoa: value => Buffer.from(value, 'binary').toString('base64'),
