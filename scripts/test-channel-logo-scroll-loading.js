@@ -8,6 +8,11 @@ const paths=[
  'web-tv/app-safari-policy-pc-controls.js',
  'web-tv/app-safari-policy-mobile-controls.js'
 ];
+const worker=fs.readFileSync('worker.js','utf8');
+assert.ok(worker.includes('NM7_CHANNEL_LOGO_SCROLL_LOADING_PATCH'),'Cloudflare Worker must inject the scroll-aware loader into served runtime scripts');
+assert.ok(worker.includes("rows.addEventListener('scroll',scheduleLogoActivation,{passive:true})"),'Worker logo loader must activate on channel-list scrolling');
+assert.ok(worker.includes('nearViewport||Math.abs(r-S.row)<=2'),'Worker logo loader must preserve remote-focus preloading');
+
 let activeSource='';
 for(const path of paths){
  const source=fs.readFileSync(path,'utf8');
