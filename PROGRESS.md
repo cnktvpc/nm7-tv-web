@@ -1,18 +1,3 @@
-## 2026-10-22 — APK Watch nghiên cứu, EPG NM7 TV Web đã merge/deploy
-
-- Phân tích APK `watch.apk`: gói `com.tieume.launchpadtv.watch`, phiên bản 1.0.1 (versionCode 29), Kotlin/Jetpack Compose. Xác định các lớp `EpgRepository`, `XmltvParser`, `EpgStore`, `EpgSchedule`, mô hình XMLTV, ghép ID/tên kênh, trạng thái PAST/LIVE/NEXT, tiến độ, thời gian còn lại và cache gzip. Đây là phân tích DEX/cấu trúc, không phải giải ngược hoàn chỉnh mã nguồn gốc.
-- PR [#22](https://github.com/cnktvpc/nm7-tv-web/pull/22) đã merge vào `main` (merge commit `38213b46ef1caa60bac3ac8c4c5dcabe2f788820`).
-- Cloudflare xác nhận rollout 100% sau merge: deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320`, version 487; lần kiểm tra tiếp theo ghi nhận deployment `04da6157-9c87-4542-a6e7-4d2a03aa5d8b`, version 488 (`11808ac1-95bb-4ad5-a96b-9aa34386f78a`), tạo 2026-10-22 00:08:33 UTC, cũng ở 100%.
-- Trang lịch production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/tv-guide.html
-- Các tệp chính: `web-tv/epg-core.js`, `web-tv/tv-guide.html`, `web-tv/tv-guide.js`, Worker route `/api/epg`. API kiểm tra URL/redirect, giới hạn thời gian và kích thước, hỗ trợ XMLTV/XMLTV.GZ, kiểm tra root XMLTV và cache. UI có hiện tại/kế tiếp, tiến độ, ngày trước/sau, xem chi tiết, lọc nhóm/tìm kiếm và nút trở lại kênh trong player.
-- Đã nối menu/handoff vào bốn runtime Web, giữ metadata `url-tvg`/`x-tvg-url`/`tvg-name`; logic LIVE/TV360 không được thay đổi chức năng. Không sửa repo NM7 TV Android hoặc NM7 Mobile.
-- **Kiểm thử PR PASS:** `Validate NM7 EPG Guide`; tất cả EPG/parser/security/channel matching; feed smoke tại thời điểm test trả 516 kênh / 28.623 chương trình; `Web Browser Validation`; LIVE player metadata; TV360 routing; production manifest smoke; browser remote + HLS E2E.
-- Đã bổ sung bước production smoke để xác minh endpoint `/api/epg` trả XMLTV hợp lệ cùng kiểm tra từ chối URL nội bộ. Cloudflare control plane đã xác nhận rollout; tuy nhiên môi trường hiện tại không cho gọi HTTP trực tiếp tới hostname `.workers.dev`, nên chưa thể thu ảnh/chạy thao tác UI trực tiếp trên trình duyệt người dùng. Cần xác nhận trải nghiệm thực tế trên PC/iPad/TV.
-- Phạm vi: NM7 TV Web/Cloudflare. NM7 TV Android và NM7 Mobile giữ nguyên.
-
-
----
-
 ## 2026-10-21 — Hoàn tất deploy runtime retry TV360 và xác minh production
 
 - **Deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã chạy Wrangler thành công. Cloudflare Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.

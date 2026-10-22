@@ -38,6 +38,7 @@ jobs:
           node scripts/test-live-feed.js
           node --check web-tv/youtube.js
           node scripts/test-sport-playlist-refresh.js
+          node scripts/test-channel-logo-scroll-loading.js
           node scripts/test-ipad-landscape-menu.js
           node scripts/test-getout-news-entry.js
           node scripts/test-onplus-media-url.js
@@ -48,13 +49,6 @@ jobs:
           node scripts/test-playback-startup-fallback.js
           node scripts/test-tv360-playback-routing.js
           node scripts/test-menu-fullscreen.js
-          node --check web-tv/epg-core.js
-          node --check web-tv/tv-guide.js
-          node scripts/test-epg-core.js
-          node scripts/test-epg-guide.js
-          test -f web-tv/tv-guide.html
-          test -f web-tv/epg-core.js
-          echo "NM7_EPG_GUIDE_REGRESSION_TESTS_OK"
           test -f web-tv/ban-tin.html
           echo "NM7_TV_JS_SYNTAX_SPORT_IPAD_AND_NEWS_REGRESSION_TESTS_OK"
 
@@ -64,48 +58,6 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
-
-      - name: Smoke test EPG page, playlist metadata and private URL rejection
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          curl -fsSL --max-time 30 "$BASE/tv-guide.html?epg_smoke=$(date +%s)" -o /tmp/nm7-tv-guide.html
-          grep -q "Lịch phát sóng" /tmp/nm7-tv-guide.html
-          grep -q "epg-core.js?v=20261022-epg-guide1" /tmp/nm7-tv-guide.html
-          curl -fsSL --max-time 30 "$BASE/epg-core.js?v=20261022-epg-guide1" -o /tmp/nm7-epg-core.js
-          grep -q "parseXmltvDate" /tmp/nm7-epg-core.js
-          private_status="$(curl -sS --max-time 20 -o /tmp/nm7-epg-private.json -w '%{http_code}' "$BASE/api/epg?u=http%3A%2F%2F127.0.0.1%2Fprivate.xml")"
-          test "$private_status" = "400"
-          grep -q "URL XMLTV không hợp lệ" /tmp/nm7-epg-private.json
-          curl -fsSL --max-time 30 "$BASE/api/playlist?source=tv&default=1" -o /tmp/nm7-epg-playlist.json
-          python3 - <<'PY'
-          import json
-          data=json.load(open('/tmp/nm7-epg-playlist.json',encoding='utf-8'))
-          if 'epgUrl' not in data:
-              raise SystemExit('EPG_PLAYLIST_METADATA_FAIL: response missing epgUrl')
-          if not isinstance(data.get('channels'),list):
-              raise SystemExit('EPG_PLAYLIST_METADATA_FAIL: channels is not a list')
-          print('NM7_EPG_GUIDE_PRODUCTION_SMOKE_OK channels='+str(len(data['channels']))+' epgUrlPresent='+str(bool(data.get('epgUrl'))))
-          PY
-
-      - name: Smoke test XMLTV proxy returns a valid guide
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          curl -fsSL --retry 2 --retry-delay 2 --max-time 75 "$BASE/api/epg?u=https%3A%2F%2Ffree-epg.de%2Fapi%2Fepg%2Fvn.xml.gz" -o /tmp/nm7-epg-live.xml
-          python3 - <<'PY'
-          import xml.etree.ElementTree as ET
-          root=ET.parse('/tmp/nm7-epg-live.xml').getroot()
-          if root.tag.lower()!='tv':
-              raise SystemExit('NM7_EPG_PROXY_SMOKE_FAIL: XMLTV root <tv> not found')
-          channels=len(root.findall('channel'))
-          programmes=len(root.findall('programme'))
-          if channels < 20 or programmes < 100:
-              raise SystemExit(f'NM7_EPG_PROXY_SMOKE_FAIL: channels={channels} programmes={programmes}')
-          print(f'NM7_EPG_PROXY_PRODUCTION_SMOKE_OK channels={channels} programmes={programmes}')
-          PY
 
       - name: Smoke test TV360 resolver proxy routing
         shell: bash
@@ -206,7 +158,7 @@ jobs:
           echo "$BG_META" | grep -q "3840x2160"
           test "$(sha256sum /tmp/nm7-bg.webp | cut -d' ' -f1)" = "d8af6ac8ba532db465dcb8c44e00b71865e6c9a712c8cc21cd0a2118400bd00d"
           grep -q "NM7 TV 1.0.69" /tmp/nm7-home.html
-          grep -q "app-safari-policy-mobile-controls.js?v=20261022-epg-guide1" /tmp/nm7-home.html
+          grep -q "app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2" /tmp/nm7-home.html
           grep -q "retryToast=20261019-cleanup1" /tmp/nm7-home.html
           grep -Fq "#player:not(.live-playback) #playerTop{display:none!important;}" /tmp/nm7-home.html
           grep -Fq "body.mobile-mode #mobileMenuBtn{display:flex;align-items:center;justify-content:center;flex:0 0 46px}" /tmp/nm7-home.html
@@ -328,7 +280,7 @@ jobs:
                   raise SystemExit("YouTube UI marker missing: "+needle)
           print("YOUTUBE_UI_SMOKE_OK")
           PY
-          APP="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261022-epg-guide1&retryToast=20261019-cleanup1")"
+          APP="$(curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2&retryToast=20261019-cleanup1")"
           python3 - "$APP" <<'PY'
           import sys
           app=sys.argv[1]
@@ -495,13 +447,13 @@ jobs:
           set -euo pipefail
           BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
           curl -fsSL --max-redirs 3 --max-time 30 "$BASE/?__mobile_player_smoke=$(date +%s)" -o /tmp/nm7-mobile-player.html
-          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261022-epg-guide1&retryToast=20261019-cleanup1&smoke=$(date +%s)" -o /tmp/nm7-mobile-player.js
+          curl -fsSL --max-redirs 3 --max-time 30 "$BASE/app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2&retryToast=20261019-cleanup1&smoke=$(date +%s)" -o /tmp/nm7-mobile-player.js
           python3 - <<'PY'
           from pathlib import Path
           html=Path('/tmp/nm7-mobile-player.html').read_text(encoding='utf-8')
           js=Path('/tmp/nm7-mobile-player.js').read_text(encoding='utf-8')
           checks={
-              'mobile runtime asset active':'app-safari-policy-mobile-controls.js?v=20261022-epg-guide1&retryToast=20261019-cleanup1' in html,
+              'mobile runtime asset active':'app-safari-policy-mobile-controls.js?v=20261021-tv360-retry404-2&retryToast=20261019-cleanup1' in html,
               'mobile fullscreen idle CSS':'#player.player-fullscreen-idle #playerFullscreenBtn{opacity:0;visibility:hidden;pointer-events:none}' in html,
               'mobile mode has dedicated timer':'function isMobileFullscreenAutoHideMode(){return !!S.mobileMode&&!isNativeTvMode()}' in js and 'var PLAYER_UI_HIDE_DELAY=2400;' in js,
               'only fullscreen shortcut hides on mobile':"current.classList.add('player-fullscreen-idle')" in js,

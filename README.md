@@ -1,17 +1,3 @@
-# Lịch phát sóng XMLTV cho NM7 TV Web — đã merge và triển khai (22/10/2026)
-
-- **Đã merge PR [#22](https://github.com/cnktvpc/nm7-tv-web/pull/22)** vào main; merge commit: `38213b46ef1caa60bac3ac8c4c5dcabe2f788820`.
-- **Cloudflare rollout xác nhận 100% traffic:** sau merge đã có deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320` (version 487); lần kiểm tra sau đó ghi nhận deployment `04da6157-9c87-4542-a6e7-4d2a03aa5d8b`, version `488` / `11808ac1-95bb-4ad5-a96b-9aa34386f78a`, tạo lúc 2026-10-22 00:08:33 UTC (100% traffic).
-- Trang lịch: https://nm7-tv-web.phuongnm7-iptv.workers.dev/tv-guide.html
-- Đã nghiên cứu cấu trúc APK Watch 1.0.1 (Kotlin/Jetpack Compose, các lớp EPG riêng) và áp dụng các ý tưởng, không sao chép mã nguồn: parser XMLTV, ghép kênh theo TVG-ID rồi TVG-name/tên đã chuẩn hóa, chương trình hiện tại/kế tiếp, thanh tiến độ và thời gian còn lại, lịch theo ngày, cache và mở lại kênh trong player.
-- Bản Web bổ sung `/tv-guide.html`, `/api/epg` cho XMLTV/XMLTV.GZ, đọc metadata `url-tvg`/`x-tvg-url`/ `tvg-name` từ playlist, lọc nhóm/tìm kiếm và chuyển từ lịch về đúng kênh. **Chỉ NM7 TV Web/Worker đã được thay đổi; NM7 TV Android và NM7 Mobile không bị sửa.**
-- **CI trên nhánh PR đã PASS:** kiểm thử parser/XMLTV/múi giờ/ghép kênh; URL EPG rỗng và địa chỉ nội bộ bị từ chối; kiểm thử 4 runtime/menu; các hồi quy LIVE, TV360, player và giao diện; browser remote + HLS E2E. Kiểm thử nguồn FreeEPG trực tiếp trả về 516 channel và 28.623 programme trong lượt chạy đó.
-- Feed mặc định là nguồn XMLTV cộng đồng FreeEPG Việt Nam. Dữ liệu có thể đổi theo thời gian và không bảo đảm khớp toàn bộ playlist NM7; giao diện cho phép thay URL. Bộ workflow deploy có kiểm tra URL nội bộ và bước smoke kiểm tra XMLTV proxy hợp lệ.
-- **Giới hạn xác minh:** Cloudflare control plane đã xác nhận version triển khai ở 100%; CI feature đầy đủ đã xanh. Môi trường xác minh hiện tại không truy cập HTTP trực tiếp tới hostname `.workers.dev`, nên chưa có ảnh chụp/giao dịch trực tiếp của trang lịch trên thiết bị người dùng. Cần thử trang lịch và nút mở kênh thực tế trên PC/iPad/TV sau khi refresh cứng.
-
-
----
-
 # Trạng thái mới nhất — TV360 retry đã triển khai và production smoke PASS (21/10/2026)
 
 - **Cloudflare deploy PASS:** guarded deploy run [#39614049693](https://github.com/cnktvpc/nm7-tv-web/actions/runs/39614049693) đã triển khai NM7 TV Web thành công. Worker version ID: `d1d1cda3-c167-4ee2-b4a0-b84c3be2841e`.
