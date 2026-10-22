@@ -62,3 +62,86 @@ jobs:
             head -c 180 "/tmp/proxy-$id.body" 2>/dev/null | tr '\n' ' ' || true
             echo
           done
+
+      - name: Compare production ClearKey KIDs against actual TV360 MPDs
+        shell: bash
+        run: |
+          set -u
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          curl --retry 3 --retry-all-errors --retry-delay 2 -fsSL --max-time 45 "$BASE/api/playlist?source=tv&default=2&refresh=1&__tv360_kidcheck=$(date +%s)" -o /tmp/tv-playlist.json
+          for id in 13 15; do
+            ENTRY="https://vmttv.dpdns.org/tv360/?id=tv360-$id"
+            ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$ENTRY")"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 2 -sS --max-time 35 -A 'Dalvik/2.1.0' -o "/tmp/tv360-kid-$id.mpd" -w '%{http_code}' "$BASE/api/stream?u=$ENC" || true)"
+            echo "KID_CHECK_MANIFEST channel=$id http=$code bytes=$(wc -c < "/tmp/tv360-kid-$id.mpd" 2>/dev/null || echo 0)"
+            python3 - "$id" /tmp/tv-playlist.json "/tmp/tv360-kid-$id.mpd" <<'PY'
+          import base64, json, re, sys, xml.etree.ElementTree as ET
+          channel, playlist_path, mpd_path = sys.argv[1:]
+          def norm(value):
+              value = str(value or '').strip().strip('"\\'')
+              value = value.replace('-', '')
+              if re.fullmatch(r'[0-9a-fA-F]{32}', value):
+                  return value.lower()
+              try:
+                  raw = base64.urlsafe_b64decode(value + '=' * ((-len(value)) % 4))
+                  if len(raw) == 16:
+                      return raw.hex()
+              except Exception:
+                  pass
+              return ''
+          def kids_from_key(value):
+              out = set()
+              value = str(value or '').strip()
+              if value.startswith('{'):
+                  try:
+                      data = json.loads(value)
+                      if isinstance(data.get('keys'), list):
+                          for entry in data['keys']:
+                              if isinstance(entry, dict):
+                                  k = norm(entry.get('kid') or entry.get('keyId'))
+                                  if k: out.add(k)
+                      elif isinstance(data.get('keys'), dict):
+                          for k in data['keys']:
+                              k = norm(k)
+                              if k: out.add(k)
+                      elif data.get('kid'):
+                          k = norm(data.get('kid'))
+                          if k: out.add(k)
+                  except Exception:
+                      pass
+              for part in re.split(r'[;,\\s]+', value):
+                  if part.count(':') == 1:
+                      k = norm(part.split(':', 1)[0])
+                      if k: out.add(k)
+              return out
+          data = json.load(open(playlist_path, encoding='utf-8'))
+          channels = [c for c in data.get('channels', []) if str(c.get('name', '')).strip().lower() == 'tv360+' + channel]
+          candidates = [x for c in channels for x in c.get('candidates', [])]
+          candidates = [x for x in candidates if 'vmttv.dpdns.org' in str(x.get('url', '')) and '/tv360' in str(x.get('url', ''))]
+          key_kids = set()
+          drm_types = set()
+          for candidate in candidates:
+              drm = candidate.get('drm') or {}
+              if drm.get('type'): drm_types.add(str(drm['type']).lower())
+              key_kids |= kids_from_key(drm.get('key'))
+          try:
+              root = ET.parse(mpd_path).getroot()
+              mpd_kids = {norm(x) for x in re.findall(r'[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}', ' '.join(
+                  elem.attrib.get('{urn:mpeg:cenc:2013}default_KID', '') for elem in root.iter()))}
+              mpd_kids.discard('')
+              for elem in root.iter():
+                  kid = elem.attrib.get('{urn:mpeg:cenc:2013}default_KID', '')
+                  if kid:
+                      k = norm(kid)
+                      if k: mpd_kids.add(k)
+          except Exception as e:
+              mpd_kids = set()
+              print('KID_CHECK_PARSE_ERROR', type(e).__name__)
+          print('KID_MATCH_DIAGNOSTIC channel=TV360+' + channel,
+                'resolverCandidates=' + str(len(candidates)),
+                'drmTypes=' + (','.join(sorted(drm_types)) or 'none'),
+                'playlistKidCount=' + str(len(key_kids)),
+                'mpdKidCount=' + str(len(mpd_kids)),
+                'kidMatch=' + str(bool(key_kids & mpd_kids)).lower())
+          PY
+          done
