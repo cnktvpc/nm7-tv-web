@@ -1,11 +1,14 @@
-# Tính năng đang phát triển — Lịch phát sóng XMLTV (22/10/2026)
+# Lịch phát sóng XMLTV cho NM7 TV Web — đã merge và triển khai (22/10/2026)
 
-- Nhánh riêng: feature/epg-tv-guide-20261022. Chưa merge vào main và chưa triển khai lên Cloudflare production.
-- Đã kiểm tra APK watch.apk (Watch 1.0.1, Android/Kotlin/Jetpack Compose). Những cơ chế có thể áp dụng hữu ích cho NM7 là parser XMLTV, ghép lịch bằng TVG-ID trước rồi đến TVG-name/tên kênh, phân chia PAST/LIVE/NEXT, phần trăm tiến độ/thời gian còn lại, lịch theo ngày, làm mới có cache và lưu cache bền vững.
-- Bản Web thử nghiệm tạo trang /tv-guide.html, thêm /api/epg đọc XMLTV/XMLTV.GZ, nhận url-tvg/x-tvg-url từ playlist và thêm mục “Lịch phát sóng · EPG” vào menu NM7. Có lọc theo nhóm/từ khóa, xem chi tiết chương trình, ngày trước/sau và nút “Xem kênh” quay lại player NM7.
-- An toàn và độ bền: chỉ HTTP/HTTPS công khai, xác thực từng redirect, giới hạn thời gian/kích thước tải, kiểm tra XMLTV, nén gzip và cache Worker/trình duyệt. Các runtime PC/mobile và logic LIVE/TV360 được giữ nguyên về chức năng; chỉ nối menu/hand-off EPG và đổi cache key.
-- Giới hạn dữ liệu quan trọng: lịch chỉ xuất hiện khi playlist khai báo URL XMLTV hợp lệ hoặc người dùng nhập URL XMLTV công khai. Nếu playlist không cung cấp EPG, NM7 gợi ý feed XMLTV Việt Nam của FreeEPG (225 kênh được công bố và cập nhật theo ngày); người dùng vẫn có thể thay URL. Nguồn bên ngoài có thể không có lịch cho tất cả kênh và được kiểm tra riêng trong CI.
-- Trạng thái hiện tại: code, regression test và production-smoke step đã được thêm trên nhánh tính năng; cần chạy kiểm thử/CI trên nhánh và xem kết quả trước khi merge. Không khẳng định production đã có EPG cho đến khi deploy và smoke xác minh thành công. Kiểm tra HTTP tự động cũng không thay thế thao tác xem thực tế trên trình duyệt TV/iPad.
+- **Đã merge PR [#22](https://github.com/cnktvpc/nm7-tv-web/pull/22)** vào main; merge commit: `38213b46ef1caa60bac3ac8c4c5dcabe2f788820`.
+- **Cloudflare rollout xác nhận 100% traffic:** Worker deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320`, version `487` / `41163598-cd20-4ea4-aea9-9159d4cd0e32`, tạo lúc 2026-10-22 00:06:25 UTC.
+- Trang lịch: https://nm7-tv-web.phuongnm7-iptv.workers.dev/tv-guide.html
+- Đã nghiên cứu cấu trúc APK Watch 1.0.1 (Kotlin/Jetpack Compose, các lớp EPG riêng) và áp dụng các ý tưởng, không sao chép mã nguồn: parser XMLTV, ghép kênh theo TVG-ID rồi TVG-name/tên đã chuẩn hóa, chương trình hiện tại/kế tiếp, thanh tiến độ và thời gian còn lại, lịch theo ngày, cache và mở lại kênh trong player.
+- Bản Web bổ sung `/tv-guide.html`, `/api/epg` cho XMLTV/XMLTV.GZ, đọc metadata `url-tvg`/`x-tvg-url`/ `tvg-name` từ playlist, lọc nhóm/tìm kiếm và chuyển từ lịch về đúng kênh. **Chỉ NM7 TV Web/Worker đã được thay đổi; NM7 TV Android và NM7 Mobile không bị sửa.**
+- **CI trên nhánh PR đã PASS:** kiểm thử parser/XMLTV/múi giờ/ghép kênh; URL EPG rỗng và địa chỉ nội bộ bị từ chối; kiểm thử 4 runtime/menu; các hồi quy LIVE, TV360, player và giao diện; browser remote + HLS E2E. Kiểm thử nguồn FreeEPG trực tiếp trả về 516 channel và 28.623 programme trong lượt chạy đó.
+- Feed mặc định là nguồn XMLTV cộng đồng FreeEPG Việt Nam. Dữ liệu có thể đổi theo thời gian và không bảo đảm khớp toàn bộ playlist NM7; giao diện cho phép thay URL. Bộ workflow deploy có kiểm tra URL nội bộ và bước smoke kiểm tra XMLTV proxy hợp lệ.
+- **Giới hạn xác minh:** Cloudflare control plane đã xác nhận version triển khai ở 100%; CI feature đầy đủ đã xanh. Môi trường xác minh hiện tại không truy cập HTTP trực tiếp tới hostname `.workers.dev`, nên chưa có ảnh chụp/giao dịch trực tiếp của trang lịch trên thiết bị người dùng. Cần thử trang lịch và nút mở kênh thực tế trên PC/iPad/TV sau khi refresh cứng.
+
 
 ---
 
