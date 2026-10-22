@@ -1456,8 +1456,8 @@ async function liveFeedResponse(request,env){
 
 
 const LIVE_PLAYER_OVERLAY_CSS='#player.live-playback #playerTop{display:none!important;}#player.live-playback #playerTitle{display:none!important;}';
-const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load3&retryToast=20261019-cleanup1';
-const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-logo-scroll-load3&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-mobile-controls.js?v=20261022-logo-scroll-load4&retryToast=20261019-cleanup1';
+const LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL='/web-tv/app-safari-policy-pc-controls.js?v=20261022-logo-scroll-load4&retryToast=20261019-cleanup1';
 const LIVE_PLAYER_INIT_RE=/S\.zone\s*=\s*['"]player['"];\s*\$\(\s*['"]player['"]\s*\)\.className\s*=\s*[^;]+;\s*\$\(\s*['"]ctrl['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*\$\(\s*['"]quick['"]\s*\)\.className\s*=\s*['"]hidden['"];\s*updatePlayerFullscreenButton\(\);\s*showPlayerFullscreenButton\(\);/;
 const LIVE_PLAYER_INIT_REPLACEMENT="S.zone='player';$('player').className=S.livePlaybackContext?'live-playback':'';$('ctrl').className='hidden';$('quick').className='hidden';updatePlayerFullscreenButton();showPlayerFullscreenButton();";
 function noCacheResponseHeaders(sourceHeaders){
@@ -1475,7 +1475,7 @@ async function liveOverlayHtmlResponse(response){
   else if(/<\/head>/i.test(html))html=html.replace(/<\/head>/i,'<style>'+LIVE_PLAYER_OVERLAY_CSS+'</style>\n</head>');
   else return new Response('LIVE title overlay release failed: could not find a safe HTML insertion point.',{status:502,headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}});
  }
- html=html.replace(/app-safari-policy-(mobile|pc)-controls\.js(?:\?v=[^"'\s>]*)?/g,(_,variant)=>variant==='pc'?LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL:LIVE_PLAYER_OVERLAY_SCRIPT_URL);
+ html=html.replace(/(?:\.\/|\/)?app-safari-policy-(mobile|pc)-controls\.js(?:\?v=[^"'\s>]*)?/g,(_,variant)=>variant==='pc'?LIVE_PLAYER_PC_OVERLAY_SCRIPT_URL:LIVE_PLAYER_OVERLAY_SCRIPT_URL);
  return new Response(html,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 async function liveOverlayScriptResponse(response){
