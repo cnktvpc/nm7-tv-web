@@ -48,6 +48,27 @@ for (const file of runtimeFiles) {
   assert.match(source, /S\.tv360404RetryCount>=5/,
     file + ': retries must be bounded at five per resolver URL');
 
+  const candidateStart = source.indexOf('function getCandidate(){');
+  const candidateEnd = source.indexOf('\n\nfunction openPlayer', candidateStart);
+  const normalizeStart = source.indexOf('function normalizeCandidate(cand){');
+  const normalizeEnd = source.indexOf('\nfunction isAppleTouchDevice', normalizeStart);
+  assert.ok(candidateStart >= 0 && candidateEnd > candidateStart && normalizeStart >= 0 && normalizeEnd > normalizeStart,
+    file + ': safe candidate selector and normalizer must be present');
+  const makeCandidateHarness = vm.runInNewContext(
+    '(function(candidates,index){var S={current:{candidates:candidates},candidateIndex:index};' +
+    source.slice(normalizeStart, normalizeEnd) + '\n' +
+    source.slice(candidateStart, candidateEnd) + '\nreturn {S:S,getCandidate:getCandidate};})');
+  const invalidIndexHarness = makeCandidateHarness([{url:'https://example.invalid/valid.mpd',type:'dash'}], 99);
+  assert.equal(invalidIndexHarness.getCandidate().url, 'https://example.invalid/valid.mpd',
+    file + ': invalid candidate index must fall back to a valid URL instead of probing undefined');
+  assert.equal(invalidIndexHarness.S.candidateIndex, 0,
+    file + ': invalid candidate index must be reset to an in-range index');
+  const missingUrlHarness = makeCandidateHarness([{url:undefined},{url:'https://example.invalid/valid.mpd',type:'dash'}], 0);
+  assert.equal(missingUrlHarness.getCandidate().url, 'https://example.invalid/valid.mpd',
+    file + ': selector must skip candidates with missing URLs');
+  assert.equal(missingUrlHarness.S.candidateIndex, 1,
+    file + ': selector must update index when it skips an invalid candidate');
+
   const classifierStart = source.indexOf('function tv360TransientHttpStatusFromShaka(e){');
   const classifierEnd = source.indexOf('function retryTv360Resolver(', classifierStart);
   assert.ok(classifierStart >= 0 && classifierEnd > classifierStart,
