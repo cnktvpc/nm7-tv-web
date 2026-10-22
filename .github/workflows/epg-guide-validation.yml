@@ -45,6 +45,7 @@ jobs:
           set -euo pipefail
           node scripts/test-epg-core.js
           node scripts/test-epg-guide.js
+          node scripts/test-device-default-preset.js
       - name: Run surrounding NM7 regressions
         run: |
           set -euo pipefail
