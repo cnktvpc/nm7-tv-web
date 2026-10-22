@@ -1,3 +1,14 @@
+## 2026-10-22 — TV360+15: DASH segment proxy đã sửa; DRM KID mismatch còn chặn playback
+
+- Production Worker **version 508** đã được cập nhật trực tiếp trên Cloudflare. Deployment ID: `eb7ccc0f-3830-4108-8665-8cef9982733f`. Đã xác minh các binding hiện hữu vẫn còn: `ASSETS`, `PLAYLIST_SOURCE → phuongnm7-playlist`, `THETHAO_SOURCE → thethaonm7`.
+- Lỗi DASH đã tái hiện được: các URI tương đối kiểu `../_shared/...` nằm dưới BaseURL proxy đã bị trình duyệt chuẩn hoá mất token ngữ cảnh; Worker trả HTTP 400 `bad dash context`. Worker nay resolve URI từ BaseURL upstream gốc rồi rewrite từng URI thành proxy URL có context riêng.
+- Production smoke sau deploy: manifest MPD trả HTTP 200; DASH initialization segments và media segments được kiểm tra trả HTTP 200 với MIME `video/mp4`. Đây là xác nhận proxy segment, **không phải** xác nhận phát hình/tiếng hoàn chỉnh.
+- Thử mở thẻ TV360+15 trên giao diện production vẫn hết timeout 15 giây. Debug Shaka phát hiện mã 4012 có `missingKeys`; KID nguồn trong playlist không khớp KID trong MPD hiện trả về. Resolver có tính bất định giữa các node (ở các lần thăm dò gần nhau, có lúc 404 và có lúc trả DASH 206).
+- Test hồi quy mới thêm cho rewrite các URL DASH tương đối `../_shared` và xác nhận URL proxy luôn giữ context token: `scripts/test-tv360-playback-routing.js`.
+- **Trạng thái:** chưa hoàn tất playback. Việc tiếp theo là đối chiếu nguồn metadata ClearKey có thẩm quyền với KID của manifest TV360+15 và xác nhận rằng cùng bộ metadata phát được ở Web. Không thay đổi NM7 TV Android/Mobile, playlist URL hay khóa DRM đang lưu; không tuyên bố PASS cho end-to-end.
+
+---
+
 ## 2026-10-22 — TV360 resolver probe recovery (đang kiểm thử nhánh riêng)
 
 - **Tái hiện lỗi production:** probe qua Worker trả HTTP 404 với một số resolver TV360, HTTP 503 ở một resolver khác, trong khi một resolver khác trả nội dung DASH. Một số phản hồi có URL cuối trông như `.mpd` dù response thất bại; vì vậy chỉ kiểm tra kiểu URL là không đủ để xác nhận manifest.
