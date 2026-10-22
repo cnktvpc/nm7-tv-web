@@ -61,7 +61,7 @@ assert.equal(resolverFixture.candidates[1].url, 'https://vmttv.dpdns.org/tv360/?
   'The original resolver must remain as a fallback');
 assert.equal(resolverFixture.candidates[1].drm.key, fixtureResolverKey,
   'Event key must not be copied onto a resolver that can return another KID');
-assert.match(worker, /Number\\(!!b\\.tv360EventFeed\\)-Number\\(!!a\\.tv360EventFeed\\)/,
+assert.ok(worker.includes("Number(!!b.tv360EventFeed)-Number(!!a.tv360EventFeed"),
   'Worker channel sorting must prioritize the paired event media candidate');
 
 for (const file of runtimeFiles) {
