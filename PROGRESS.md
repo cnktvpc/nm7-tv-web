@@ -1,3 +1,17 @@
+## 2026-10-22 — Xác minh cuối bản sửa logo production
+
+- Mã sửa URL runtime và phạm vi bản vá logo đã được commit trên nhánh `main`: [`a93a93c`](https://github.com/cnktvpc/nm7-tv-web/commit/a93a93ca6d9d8efb9967cdf5620da22898f23e5a).
+- Cloudflare production đang chạy Worker **version 499**, version ID `112ad8d5-a43e-4e6a-83ea-594cf88e3adc`, deployment ID `68b84d70-7395-446d-99f8-f62a6d51610e`, traffic 100%.
+- Đã kiểm tra trực tiếp: homepage HTTP 200, đường dẫn runtime script không còn tiền tố sai `.//web-tv/`; runtime script trả HTTP 200 và có bản vá kích hoạt logo/cuộn bên trong IIFE.
+- Ảnh chụp trình duyệt production ở cả bố cục dọc và ngang hiển thị danh sách kênh cùng logo VTV, SCTV, VTVCab. API playlist trả HTTP 200 và có URL logo VTV1; proxy ảnh tải được logo VTV1 HD.
+- Không thay đổi NM7 TV Android hoặc NM7 Mobile. Các binding Cloudflare `ASSETS`, `PLAYLIST_SOURCE=phuongnm7-playlist`, `THETHAO_SOURCE=thethaonm7` được giữ nguyên.
+- **GitHub Actions vẫn là việc riêng chưa giải quyết:** các workflow liên quan commit `98a12d3` thất bại trước khi runner khởi chạy (không có steps/log). Worker đã được triển khai trực tiếp qua Cloudflare API và được smoke-test; không đánh dấu Actions là thành công.
+- Lưu ý: công cụ scrape DOM đôi lúc báo “Đang tải truyền hình…” trong khi ảnh chụp trình duyệt production hiển thị logo. Vì vậy, kết luận UI dựa trên ảnh chụp và kiểm tra HTTP/runtime; vẫn nên xác nhận trên thiết bị thật sau khi tải lại trang.
+
+Production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/
+
+---
+
 ## 2026-10-22 — Sửa logo kênh và xác minh Worker production
 
 - **Đã deploy trực tiếp lên Cloudflare Workers:** version **499**, version ID `112ad8d5-a43e-4e6a-83ea-594cf88e3adc`, deployment ID `68b84d70-7395-446d-99f8-f62a6d51610e`, traffic 100% (2026-10-22 03:12:19 UTC).
