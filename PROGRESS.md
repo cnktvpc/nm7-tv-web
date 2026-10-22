@@ -2,7 +2,7 @@
 
 - Phân tích APK `watch.apk`: gói `com.tieume.launchpadtv.watch`, phiên bản 1.0.1 (versionCode 29), Kotlin/Jetpack Compose. Xác định các lớp `EpgRepository`, `XmltvParser`, `EpgStore`, `EpgSchedule`, mô hình XMLTV, ghép ID/tên kênh, trạng thái PAST/LIVE/NEXT, tiến độ, thời gian còn lại và cache gzip. Đây là phân tích DEX/cấu trúc, không phải giải ngược hoàn chỉnh mã nguồn gốc.
 - PR [#22](https://github.com/cnktvpc/nm7-tv-web/pull/22) đã merge vào `main` (merge commit `38213b46ef1caa60bac3ac8c4c5dcabe2f788820`).
-- Cloudflare xác nhận Worker rollout 100%: deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320`, version 487 (`41163598-cd20-4ea4-aea9-9159d4cd0e32`), tạo 2026-10-22 00:06:25 UTC.
+- Cloudflare xác nhận rollout 100% sau merge: deployment `1510a0cd-e4b1-42ae-80e2-c8ba29be3320`, version 487; lần kiểm tra tiếp theo ghi nhận deployment `04da6157-9c87-4542-a6e7-4d2a03aa5d8b`, version 488 (`11808ac1-95bb-4ad5-a96b-9aa34386f78a`), tạo 2026-10-22 00:08:33 UTC, cũng ở 100%.
 - Trang lịch production: https://nm7-tv-web.phuongnm7-iptv.workers.dev/tv-guide.html
 - Các tệp chính: `web-tv/epg-core.js`, `web-tv/tv-guide.html`, `web-tv/tv-guide.js`, Worker route `/api/epg`. API kiểm tra URL/redirect, giới hạn thời gian và kích thước, hỗ trợ XMLTV/XMLTV.GZ, kiểm tra root XMLTV và cache. UI có hiện tại/kế tiếp, tiến độ, ngày trước/sau, xem chi tiết, lọc nhóm/tìm kiếm và nút trở lại kênh trong player.
 - Đã nối menu/handoff vào bốn runtime Web, giữ metadata `url-tvg`/`x-tvg-url`/`tvg-name`; logic LIVE/TV360 không được thay đổi chức năng. Không sửa repo NM7 TV Android hoặc NM7 Mobile.
