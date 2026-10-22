@@ -45,7 +45,7 @@ for (const file of runtimeFiles) {
     file + ': fatal Shaka errors must invoke bounded transient HTTP recovery');
   assert.match(source, /var tv360LoadStatus=tv360TransientHttpStatusFromShaka\(e\)/,
     file + ': Shaka manifest-load failures must invoke bounded transient HTTP recovery');
-  assert.match(source, /S\.tv360404RetryCount>=2/,
+  assert.match(source, /S\.tv360404RetryCount>=5/,
     file + ': retries must be bounded at two per resolver URL');
 
   const classifierStart = source.indexOf('function tv360TransientHttpStatusFromShaka(e){');
