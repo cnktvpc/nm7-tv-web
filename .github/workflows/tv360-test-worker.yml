@@ -34,6 +34,20 @@ jobs:
           done
       - name: Validate TV360 production manifest test syntax
         run: python -m py_compile scripts/test-tv360-production-manifest.py
+      - name: Verify ZIP runtime snapshot was synchronized
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_blob() {
+            expected="$1"
+            file="$2"
+            actual="$(git hash-object "$file")"
+            echo "$file expected=$expected actual=$actual"
+            test "$actual" = "$expected"
+          }
+          check_blob b9eb59ade18bd8ba76cd69eab7c1a0c8de2c2768 worker.js
+          check_blob bd5e53f7769c62ca555f5efb92d9027de0771577 web-tv/app.js
+          check_blob 95cf1e0a02f77d1d421c878209553681d12f7041 web-tv/index.html
       - name: Deploy isolated test Worker
         uses: cloudflare/wrangler-action@v3
         with:
