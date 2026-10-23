@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Production-only TV360 proxy smoke. Prints statuses and media types, never stream URLs or DRM keys."""
 import json
+import os
 import re
 import subprocess
 import time
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urljoin, urlparse
 
-BASE_URL = "https://nm7-tv-web.phuongnm7-iptv.workers.dev"
+BASE_URL = os.environ.get("NM7_TV360_BASE_URL", "https://nm7-tv-web.phuongnm7-iptv.workers.dev").rstrip("/")
 USER_AGENT = "Dalvik/2.1.0"
 RESOLVER = "https://vmttv.dpdns.org/tv360/?id=tv360-{channel_id}"
 
 
 def fail(message):
-    raise SystemExit("TV360_PRODUCTION_MEDIA_SMOKE_FAIL: " + message)
+    raise SystemExit("TV360_MEDIA_SMOKE_FAIL: " + message)
 
 
 def http_get(url, label, byte_range=None, allow_http_errors=False):

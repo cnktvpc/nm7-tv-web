@@ -16,6 +16,7 @@ concurrency:
 jobs:
   regression:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,3 +65,9 @@ jobs:
             echo "$path -> HTTP $code"
             test "$code" -ge 200 -a "$code" -lt 400
           done
+
+      - name: TV360 manifest and DASH/HLS resource smoke on isolated test Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          NM7_TV360_BASE_URL="https://nm7-tv-web-test.phuongnm7-iptv.workers.dev" python scripts/test-tv360-production-manifest.py
