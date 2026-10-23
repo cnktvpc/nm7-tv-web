@@ -57,3 +57,13 @@ These are source-level intentions validated by the ZIP's local regression suite;
 ## Current blocking failure and next safe action
 
 The GitHub Actions failure is the explicit snapshot gate, not a failing TV360 runtime test: the branch's `worker.js`, `web-tv/app.js`, and `web-tv/index.html` still do not match the ZIP blobs listed above. The deploy and remote smoke steps are consequently skipped. Do not weaken the hash gate or promote this branch. The correct next action is to synchronize the three exact ZIP files to this test branch, rerun Actions, then validate the isolated Worker and current TV360 manifest/segments.
+
+
+## Isolated test staging update — 2026-10-23
+
+To unblock validation without asking the user to run local commands, the test branch now stages the closest TV360 runtime already available in GitHub from `fix/tv360-drm-diagnostic-workflow-20261022`:
+- `worker.js`: `f0554d684a4cf078d515418e983a7e1ed1c59024`
+- `web-tv/app.js`: `4b4d627fe33646ba5ee61db410b1650c31d473bf`
+- `web-tv/index.html`: `95cf1e0a02f77d1d421c878209553681d12f7041` (same as the ZIP)
+
+The isolated workflow now verifies these staged candidate blob hashes before deploying to `nm7-tv-web-test`. This is a **candidate-runtime test**, not an assertion that the original ZIP has been fully synchronized: the ZIP's own worker/app hashes remain different. The purpose is to test the available TV360 retry, ClearKey and proxy fixes in a non-production Worker while preserving the exact ZIP hash record above. Do not merge to `main` or deploy the production Worker based only on this candidate test.
