@@ -38,3 +38,22 @@ The current Git branch still has the same hashes as `main` for these files. The 
 
 ## Promotion gate
 Do not merge this branch into `main` until the ZIP runtime snapshot is synchronized, the GitHub Actions workflow is green, and remote test-Worker smoke checks succeed. Do not describe the local test pass as proof that TV360 streams play on the deployed Worker.
+
+
+## ZIP change review — 2026-10-23 follow-up
+
+Reviewed the actual ZIP source around the TV360 recovery patch and its regression tests. The intended functional changes are:
+
+1. **Resolver/probe reliability:** distinguish the upstream HTTP status from the final redirected URL; do not treat a redirect ending in `.mpd` as proof that the resolver succeeded. Retry TV360 resolver/network failures for HTTP 404, 408, 429 and 5xx before moving to the next candidate, with a bounded retry ceiling of five.
+2. **Proxy-first TV360 playback:** force TV360 resolver URLs through the Worker proxy even when a cached candidate has lost its `forceProxy` marker; avoid an unnecessary second proxy hop for rewritten `/api/dash-resource/` URLs.
+3. **DASH resource rewriting:** rewrite MPD initialization/media references to context-bearing Worker resource URLs, preserving relative paths against the upstream manifest directory.
+4. **ClearKey handling:** preserve Base64URL '-'/'_' while decoding 128-bit keys; combine fallback event DRM keys only when needed; probe manifest KIDs before allowing a resolver key to replace a candidate key.
+5. **Stale cache/candidate safety:** bump the runtime cache schema so legacy candidates are invalidated, validate candidate indexes and skip empty/invalid URLs.
+6. **Playback recovery:** handle transient Shaka/HLS HTTP failures with bounded resolver retries, use a muted autoplay retry when browser policy blocks playback, and watch for a real Apple DRM stall before restarting.
+7. **Regression coverage:** tests assert TV360 event-key merging, candidate recovery, DASH proxy rewriting, HLS segment proxying, startup fallback and other existing UI/player regressions.
+
+These are source-level intentions validated by the ZIP's local regression suite; they do not establish that the upstream TV360 service is currently returning playable manifests or that playback works on the deployed Worker.
+
+## Current blocking failure and next safe action
+
+The GitHub Actions failure is the explicit snapshot gate, not a failing TV360 runtime test: the branch's `worker.js`, `web-tv/app.js`, and `web-tv/index.html` still do not match the ZIP blobs listed above. The deploy and remote smoke steps are consequently skipped. Do not weaken the hash gate or promote this branch. The correct next action is to synchronize the three exact ZIP files to this test branch, rerun Actions, then validate the isolated Worker and current TV360 manifest/segments.
