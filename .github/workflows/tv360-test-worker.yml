@@ -1,0 +1,51 @@
+name: TV360 Test Worker (isolated)
+
+on:
+  push:
+    branches:
+      - test/nm7-tv360-20261023
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nm7-tv360-test-worker
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: TV360 live key overlay regression
+        run: node scripts/test-tv360-live-key-overlay.js
+      - name: TV360 playback routing regression
+        run: node scripts/test-tv360-playback-routing.js
+      - name: DASH proxy regression
+        run: node scripts/test-worker-dash-proxy.js
+      - name: HLS segment regression
+        run: node scripts/test-worker-hls-segments.js
+      - name: Deploy isolated test Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.test.toml
+      - name: Smoke test isolated Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web-test.phuongnm7-iptv.workers.dev"
+          for path in / /index.html /app.js; do
+            code="$(curl --retry 5 --retry-all-errors --retry-delay 2 -sS -o /tmp/body -w '%{http_code}' "$BASE$path")"
+            echo "$path -> HTTP $code"
+            test "$code" -ge 200 -a "$code" -lt 400
+          done
+          grep -qi '<html' /tmp/body || true
