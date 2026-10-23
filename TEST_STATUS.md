@@ -67,3 +67,8 @@ To unblock validation without asking the user to run local commands, the test br
 - `web-tv/index.html`: `95cf1e0a02f77d1d421c878209553681d12f7041` (same as the ZIP)
 
 The isolated workflow now verifies these staged candidate blob hashes before deploying to `nm7-tv-web-test`. This is a **candidate-runtime test**, not an assertion that the original ZIP has been fully synchronized: the ZIP's own worker/app hashes remain different. The purpose is to test the available TV360 retry, ClearKey and proxy fixes in a non-production Worker while preserving the exact ZIP hash record above. Do not merge to `main` or deploy the production Worker based only on this candidate test.
+
+
+## Candidate suite alignment — 2026-10-23
+
+The first candidate run was stopped by an internal version mismatch: its `index.html` used the `tv360-dash-reproxy-fix1` control-script cache key while the test branch still contained a newer `tv360-probe-recovery1` assertion. No Worker deployment occurred. The candidate branch has now been aligned with its matching TV360 regression tests and Safari control scripts from `fix/tv360-drm-diagnostic-workflow-20261022`; the intended ZIP source still has not been fully transferred, so this remains an isolated candidate validation rather than a ZIP-exact result.
