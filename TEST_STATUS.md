@@ -77,3 +77,25 @@ The first candidate run was stopped by an internal version mismatch: its `index.
 ## CI follow-up — cache-buster consistency
 
 The next CI attempt passed the default-device test but failed in `test-ipad-landscape-menu.js`: the copied `index.html` uses the `tv360-dash-reproxy-fix1` asset key, while `.github/workflows/cloudflare-deploy.yml` still contained the later `tv360-probe-recovery1` reference from a different snapshot. I am aligning the matching workflow and diagnostic files with the candidate's source snapshot before rerunning; deployment remains skipped until tests pass.
+
+
+## Final isolated validation result — 2026-10-23
+
+**GitHub Actions run:** https://github.com/cnktvpc/nm7-tv-web/actions/runs/39925926381  
+**Commit tested:** `c9b45d126269efc74afae452c8c1b05c9430c930`  
+**Result:** all workflow steps succeeded.
+
+Confirmed from the run logs:
+- Full JavaScript regression suite: passed.
+- TV360 manifest test Python syntax: passed.
+- Staged candidate runtime blob checks: passed.
+- Deploy to isolated Worker `nm7-tv-web-test`: passed.
+- Generic HTTP smoke checks: passed.
+- TV360+10: HLS manifest HTTP 200, HLS media child HTTP 206 (1,024 bytes, `video/mp2t`).
+- TV360+13: DASH manifest HTTP 200; initialization and media resources returned HTTP 206 (1,024 bytes each, `video/mp4`).
+- TV360+15: DASH manifest HTTP 200; initialization and media resources returned HTTP 206 (1,024 bytes each, `video/mp4`).
+- Final probe marker: `TV360_PRODUCTION_MEDIA_SMOKE_OK`; this marker was emitted by running the test script with `NM7_TV360_BASE_URL=https://nm7-tv-web-test.phuongnm7-iptv.workers.dev`, so these results are for the **isolated test Worker**, not production.
+
+## Remaining limitation
+
+This proves that the staged candidate runtime can route and fetch the checked HLS/DASH manifests and segment/init resources through the isolated Worker. It does **not** prove full end-user playback on every browser/device. It also does not mean the entire original ZIP runtime snapshot was synchronized: the staged `worker.js` and `web-tv/app.js` are from the existing `fix/tv360-drm-diagnostic-workflow-20261022` candidate branch; only `web-tv/index.html` is byte-for-byte identical to the ZIP snapshot. Production branch `main` and production Worker `nm7-tv-web` were not changed or deployed by this test.
