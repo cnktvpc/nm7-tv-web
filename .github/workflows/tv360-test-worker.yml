@@ -24,14 +24,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: TV360 live key overlay regression
-        run: node scripts/test-tv360-live-key-overlay.js
-      - name: TV360 playback routing regression
-        run: node scripts/test-tv360-playback-routing.js
-      - name: DASH proxy regression
-        run: node scripts/test-worker-dash-proxy.js
-      - name: HLS segment regression
-        run: node scripts/test-worker-hls-segments.js
+      - name: Run JavaScript regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test in scripts/test-*.js; do
+            echo "===== $test ====="
+            node "$test"
+          done
+      - name: Validate TV360 production manifest test syntax
+        run: python -m py_compile scripts/test-tv360-production-manifest.py
       - name: Deploy isolated test Worker
         uses: cloudflare/wrangler-action@v3
         with:
@@ -48,4 +50,3 @@ jobs:
             echo "$path -> HTTP $code"
             test "$code" -ge 200 -a "$code" -lt 400
           done
-          grep -qi '<html' /tmp/body || true
