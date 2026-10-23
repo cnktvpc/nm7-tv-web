@@ -1,41 +1,40 @@
 # TV360 test branch status — 2026-10-23
 
-## Isolation and safety
+## Branch and production safety
 - Test branch: `test/nm7-tv360-20261023`
-- Production branch `main` was not changed.
-- Production Worker `nm7-tv-web` was not intentionally deployed by this test branch.
+- Base: `main` at `7360d4226942cd62bc5329460decec253f5604ae`.
+- Production branch `main` has not been changed by this test work.
+- Production Worker `nm7-tv-web` has not been intentionally redeployed by this test workflow.
 - Isolated Wrangler config: `wrangler.test.toml`, Worker name `nm7-tv-web-test`.
 
-## Local validation of the user-provided ZIP snapshot
-The following 20 JavaScript regression scripts passed locally under Node.js 22:
-- test-channel-logo-scroll-loading.js
-- test-custom-m3u-headers-probe.js
-- test-desktop-home-tabs.js
-- test-device-default-preset.js
-- test-getout-news-entry.js
-- test-home-title-mobile-overlap.js
-- test-ipad-landscape-menu.js
-- test-live-feed.js
-- test-live-player-hide-metadata.js
-- test-menu-fullscreen.js
-- test-news-thumbnail-parser.js
-- test-onplus-media-url.js
-- test-playback-startup-fallback.js
-- test-sctv4k-proxy-preference.js
-- test-sport-playlist-refresh.js
-- test-stalker-default-user-agent.js
-- test-tv360-live-key-overlay.js
-- test-tv360-playback-routing.js
-- test-worker-dash-proxy.js
-- test-worker-hls-segments.js
+## Local validation performed against the user-provided ZIP
+Extracted `nm7-tv-web-fix-tv360-complete-20261023.zip` and ran all 20 `scripts/test-*.js` files using Node.js v22.16.0. Result: **20 passed, 0 failed**.
 
-Python syntax validation for `scripts/test-tv360-production-manifest.py` passed.
+Coverage includes:
+- TV360 live key overlay and TV360 playback routing
+- DASH proxy and HLS segment rewriting
+- Playback startup fallback
+- SCTV4K proxy preference
+- Stalker UA/header handling
+- Sport playlist refresh
+- Live feed grouping/player metadata
+- iPad landscape menu and desktop/fullscreen controls
+- News, logo loading, playlist probe, device presets and other UI regressions
 
-## Blocked validation
-The production-manifest/media smoke test did not complete: it reported `playlist-json: transport failed (curl exit 6)`, which indicates DNS/network resolution failed in the current test environment. This is not a passing playback test.
+Also ran `python -m py_compile scripts/test-tv360-production-manifest.py`; syntax validation passed.
 
-## Important limitation
-The ZIP snapshot contains runtime files whose Git blob hashes differ from the current `main` branch (including `worker.js`, `web-tv/app.js`, and `web-tv/index.html`). This status records tests run against the ZIP locally; it does **not** claim that the full ZIP snapshot has been synchronized to this Git branch or deployed to the test Worker.
+## Checks that are not yet passing / not yet confirmed
+- The live manifest/network smoke test did not complete: `playlist-json: transport failed (curl exit 6)`. This indicates DNS/network resolution failure in the current execution environment, so it is **not** a successful remote playback test.
+- No successful GitHub Actions result has been observed for the test branch.
+- No successful remote smoke test of the test Worker has been confirmed.
+
+## ZIP source synchronization gate
+The ZIP runtime files are different from the current Git branch. Verified Git blob hashes from the ZIP:
+- `worker.js`: `b9eb59ade18bd8ba76cd69eab7c1a0c8de2c2768`
+- `web-tv/app.js`: `bd5e53f7769c62ca555f5efb92d9027de0771577`
+- `web-tv/index.html`: `95cf1e0a02f77d1d421c878209553681d12f7041`
+
+The current Git branch still has the same hashes as `main` for these files. The workflow now checks for the ZIP hashes before deploy, so it will fail closed instead of deploying the wrong runtime. Full ZIP contents have **not** yet been synchronized to GitHub.
 
 ## Promotion gate
-Do not merge this branch into `main` until the full ZIP runtime snapshot is synchronized, the GitHub Actions run is green, and remote test-Worker smoke checks complete successfully.
+Do not merge this branch into `main` until the ZIP runtime snapshot is synchronized, the GitHub Actions workflow is green, and remote test-Worker smoke checks succeed. Do not describe the local test pass as proof that TV360 streams play on the deployed Worker.
