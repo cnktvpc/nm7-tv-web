@@ -72,3 +72,8 @@ The isolated workflow now verifies these staged candidate blob hashes before dep
 ## Candidate suite alignment — 2026-10-23
 
 The first candidate run was stopped by an internal version mismatch: its `index.html` used the `tv360-dash-reproxy-fix1` control-script cache key while the test branch still contained a newer `tv360-probe-recovery1` assertion. No Worker deployment occurred. The candidate branch has now been aligned with its matching TV360 regression tests and Safari control scripts from `fix/tv360-drm-diagnostic-workflow-20261022`; the intended ZIP source still has not been fully transferred, so this remains an isolated candidate validation rather than a ZIP-exact result.
+
+
+## CI follow-up — cache-buster consistency
+
+The next CI attempt passed the default-device test but failed in `test-ipad-landscape-menu.js`: the copied `index.html` uses the `tv360-dash-reproxy-fix1` asset key, while `.github/workflows/cloudflare-deploy.yml` still contained the later `tv360-probe-recovery1` reference from a different snapshot. I am aligning the matching workflow and diagnostic files with the candidate's source snapshot before rerunning; deployment remains skipped until tests pass.

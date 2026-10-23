@@ -2,159 +2,288 @@ name: Diagnose TV360 ClearKey DASH endpoints
 
 on:
   push:
-    branches: ["main", "feat/tvdrm-player-integration-20261004"]
+    branches: ["main", "fix/tv360-drm-diagnostic-workflow-20261022"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Probe TV360 1-10
+      - name: Probe TV360 resolver endpoints
         shell: bash
         run: |
-          set +euo pipefail
-          for id in $(seq 1 10); do
-            U="https://vmttv.dpdns.org/tv360/"
+          set -u
+          for id in 1 2 3 4 5 6 7 8 9 10 13 15; do
             echo "===== TV360-$id ====="
-            curl -L --max-time 20 --get --data-urlencode "id=tv360-$id" -sS -D "/tmp/h$id" -o "/tmp/b$id" -A "Dalvik/2.1.0" "$U"
-            echo "HTTP=$(grep -m1 -E '^HTTP/' /tmp/h$id | tail -1)"
-            echo "FINAL=$(grep -i '^location:' /tmp/h$id | tail -1 | sed 's/\r//')"
-            echo "BYTES=$(wc -c < /tmp/b$id)"
-            python3 - "$id" "/tmp/b$id" <<'PY'
-          import sys, re, xml.etree.ElementTree as ET
-          i,p=sys.argv[1],sys.argv[2]
-          b=open(p,'rb').read()
-          if b.lstrip().startswith(b'<'):
-            try:
-              root=ET.fromstring(b)
-              ns={'d':'urn:mpeg:dash:schema:mpd:2011'}
-              print("TYPE",root.attrib.get('type'),"UPDATE",root.attrib.get('minimumUpdatePeriod'),
-                    "TSBD",root.attrib.get('timeShiftBufferDepth'),"SPD",root.attrib.get('suggestedPresentationDelay'))
-              for a in root.findall('.//d:AdaptationSet',ns):
-                reps=a.findall('d:Representation',ns)
-                cps=a.findall('d:ContentProtection',ns)
-                print("ADAPT",a.attrib.get('contentType'),a.attrib.get('mimeType'),
-                      a.attrib.get('codecs'),"REPS",len(reps),"CP",len(cps))
-                for r in reps[:8]:
-                  print(" REP",r.attrib.get('id'),r.attrib.get('bandwidth'),
-                        r.attrib.get('width'),r.attrib.get('height'),r.attrib.get('frameRate'),
-                        r.attrib.get('codecs'))
-            except Exception as e: print("XML_ERROR",type(e).__name__,str(e)[:160])
-          else:
-            print("BODY_HEAD",b[:180].decode('utf-8','replace').replace('\n',' '))
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 2 -L --max-time 25 -sS -A 'Dalvik/2.1.0' -o "/tmp/tv360-$id.body" -w '%{http_code}' --get --data-urlencode "id=tv360-$id" 'https://vmttv.dpdns.org/tv360/' || true)"
+            echo "HTTP=$code BYTES=$(wc -c < "/tmp/tv360-$id.body" 2>/dev/null || echo 0)"
+            python3 - "$id" "/tmp/tv360-$id.body" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          channel, path = sys.argv[1:]
+          try:
+              data = open(path, 'rb').read()
+          except OSError as exc:
+              print("READ_ERROR", repr(exc)); raise SystemExit(0)
+          if not data:
+              print("EMPTY_BODY"); raise SystemExit(0)
+          try:
+              root = ET.fromstring(data)
+          except ET.ParseError:
+              print("NON_MPD_BODY", data[:180].decode("utf-8", "replace").replace("\n", " "))
+              raise SystemExit(0)
+          ns = {"d": "urn:mpeg:dash:schema:mpd:2011"}
+          print("MPD", "type="+str(root.get("type")), "dynamic="+str(root.get("minimumUpdatePeriod")),
+                "timeShiftBufferDepth="+str(root.get("timeShiftBufferDepth")))
+          protection = root.findall(".//d:ContentProtection", ns)
+          print("CONTENT_PROTECTION_COUNT", len(protection))
+          for item in protection:
+              print("CONTENT_PROTECTION", item.get("schemeIdUri"), item.get("{urn:mpeg:cenc:2013}default_KID"))
+          for aset in root.findall(".//d:AdaptationSet", ns):
+              reps = aset.findall("d:Representation", ns)
+              print("ADAPTATION", aset.get("contentType"), aset.get("mimeType"),
+                    "representations="+str(len(reps)))
           PY
           done
 
-      - name: Verify live MPD initialization and media segments
+      - name: Probe deployed Worker proxy response
         shell: bash
         run: |
-          set +euo pipefail
-          id=1
-          U="https://vmttv.dpdns.org/tv360/"
-          echo "===== TV360-$id segment path ====="
-          FINAL="$(curl -L --max-time 20 --get --data-urlencode "id=tv360-$id" -sS -o /tmp/mpd1 -w '%{url_effective}' -A "Dalvik/2.1.0" "$U")"
-          python3 - "$FINAL" /tmp/mpd1 /tmp/segments.txt <<'PY'
-          import sys, re, urllib.parse, xml.etree.ElementTree as ET
-          final, path, outp=sys.argv[1:]
-          b=open(path,'rb').read(); root=ET.fromstring(b)
-          ns={'d':'urn:mpeg:dash:schema:mpd:2011'}
-          base_node=root.find('d:BaseURL',ns)
-          base=(base_node.text.strip() if base_node is not None and base_node.text else final.rsplit('/',1)[0]+'/')
-          def fmt(t,rep,num,time):
-              if not t:return ''
-              vals={'RepresentationID':rep,'Number':str(num),'Time':str(time)}
-              for k,v in vals.items(): t=t.replace('$'+k+'$',v)
-              return t
-          lines=[]
-          for aset in root.findall('.//d:AdaptationSet',ns):
-              reps=aset.findall('d:Representation',ns)
-              if not reps: continue
-              rep=reps[0]; rid=rep.attrib.get('id','')
-              st=rep.find('d:SegmentTemplate',ns) or aset.find('d:SegmentTemplate',ns)
-              if st is None: continue
-              init=fmt(st.attrib.get('initialization'),rid,0,0)
-              if init:
-                  lines.append('init|'+urllib.parse.urljoin(base,init))
-              media=st.attrib.get('media',''); timescale=int(st.attrib.get('timescale','1'))
-              timeline=st.find('d:SegmentTimeline',ns)
-              if media and timeline is not None:
-                  ss=timeline.findall('d:S',ns)
-                  if ss:
-                      cur=0; last=None
-                      for s in ss:
-                          if s.get('t') is not None: cur=int(s.get('t'))
-                          d=int(s.get('d','0')); r=int(s.get('r','0'))
-                          count=(r+1) if r>=0 else 1
-                          for n in range(count):
-                              last=(cur,cur+d);cur+=d
-                      if last:
-                          t,e=last
-                          lines.append('media|'+urllib.parse.urljoin(base,fmt(media,rid,0,t)))
-                  else:
-                      pass
-          lines=lines[:6]
-          open(outp,'w').write('\n'.join(lines))
-          print('SEGMENT_URL_COUNT',len(lines))
-          PY
-          n=0
-          while IFS='|' read -r kind url; do
-            [ -n "$url" ] || continue
-            n=$((n+1))
-            code_size="$(curl -sS -L --max-time 15 -o "/tmp/seg$n" -w '%{http_code} %{size_download}' -A "Dalvik/2.1.0" "$url")"
-            echo "$kind $code_size"
-          done < /tmp/segments.txt
+          set -u
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          for id in tv360-10 tv360-13 tv360-15; do
+            ENTRY="https://vmttv.dpdns.org/tv360/?id=$id"
+            ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$ENTRY")"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 2 -sS --max-time 30 -A 'Dalvik/2.1.0' -o "/tmp/proxy-$id.body" -w '%{http_code}' "$BASE/api/stream?u=$ENC" || true)"
+            echo "PROXY $id HTTP=$code BYTES=$(wc -c < "/tmp/proxy-$id.body" 2>/dev/null || echo 0)"
+            head -c 180 "/tmp/proxy-$id.body" 2>/dev/null | tr '\n' ' ' || true
+            echo
+          done
 
-      - name: Verify deployed proxy MPD and segment path
+      - name: Compare production ClearKey KIDs against actual TV360 MPDs
         shell: bash
         run: |
-          set +euo pipefail
-          BASE="https://nm7-tv-web.phuongnm7-iptv.workers.dev"
-          ENTRY='https://vmttv.dpdns.org/tv360/?id=tv360-1'
-          ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$ENTRY")"
-          echo "===== deployed proxy MPD ====="
-          curl -sS --max-time 25 -o /tmp/proxy-mpd -w 'HTTP=%{http_code} BYTES=%{size_download}
-' -A "Dalvik/2.1.0" "$BASE/api/stream?u=$ENC"
-          python3 - "/tmp/proxy-mpd" "/tmp/proxy-segments.txt" <<'PY'
-          import sys, urllib.parse, xml.etree.ElementTree as ET
-          p,outp=sys.argv[1:]
-          b=open(p,'rb').read(); root=ET.fromstring(b)
-          ns={'d':'urn:mpeg:dash:schema:mpd:2011'}
-          bn=root.find('d:BaseURL',ns)
-          base=(bn.text.strip() if bn is not None and bn.text else '')
-          print("PROXY_HAS_BASEURL",bool(base))
-          print("PROXY_BASE_HOST",urllib.parse.urlsplit(base).netloc if base else '')
-          def fmt(t,rep,time):
-              if not t:return ''
-              return t.replace('$RepresentationID$',rep).replace('$Time$',str(time)).replace('$Number$','0')
-          lines=[]
-          for aset in root.findall('.//d:AdaptationSet',ns):
-              reps=aset.findall('d:Representation',ns)
-              if not reps: continue
-              rep=reps[0]; rid=rep.attrib.get('id','')
-              st=rep.find('d:SegmentTemplate',ns) or aset.find('d:SegmentTemplate',ns)
-              if st is None: continue
-              init=fmt(st.attrib.get('initialization'),rid,0)
-              if init and base: lines.append('init|'+urllib.parse.urljoin(base,init))
-              timeline=st.find('d:SegmentTimeline',ns); media=st.attrib.get('media','')
-              if timeline is not None and media:
-                  ss=timeline.findall('d:S',ns)
-                  cur=0
-                  for s in ss:
-                      if s.get('t') is not None: cur=int(s.get('t'))
-                  if ss:
-                      d=int(ss[-1].get('d','0'))
-                      if s.get('t') is None: cur=max(0,cur)
-                      lines.append('media|'+urllib.parse.urljoin(base,fmt(media,rid,cur)))
-              if len(lines)>=4: break
-          open(outp,'w').write('\n'.join(lines))
-          print("PROXY_SEGMENT_URL_COUNT",len(lines))
+          set -u
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          curl --retry 3 --retry-all-errors --retry-delay 2 -fsSL --max-time 45 "$BASE/api/playlist?source=tv&default=2&refresh=1&__tv360_kidcheck=$(date +%s)" -o /tmp/tv-playlist.json
+          for id in 13 15; do
+            ENTRY="https://vmttv.dpdns.org/tv360/?id=tv360-$id"
+            ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$ENTRY")"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 2 -sS --max-time 35 -A 'Dalvik/2.1.0' -o "/tmp/tv360-kid-$id.mpd" -w '%{http_code}' "$BASE/api/stream?u=$ENC" || true)"
+            echo "KID_CHECK_MANIFEST channel=$id http=$code bytes=$(wc -c < "/tmp/tv360-kid-$id.mpd" 2>/dev/null || echo 0)"
+            python3 - "$id" /tmp/tv-playlist.json "/tmp/tv360-kid-$id.mpd" <<'PY'
+          import base64, json, re, sys, xml.etree.ElementTree as ET
+          channel, playlist_path, mpd_path = sys.argv[1:]
+          def norm(value):
+              value = str(value or '').strip().strip(chr(34)).strip(chr(39))
+              value = value.replace('-', '')
+              if re.fullmatch(r'[0-9a-fA-F]{32}', value):
+                  return value.lower()
+              try:
+                  raw = base64.urlsafe_b64decode(value + '=' * ((-len(value)) % 4))
+                  if len(raw) == 16:
+                      return raw.hex()
+              except Exception:
+                  pass
+              return ''
+          def kids_from_key(value):
+              out = set()
+              value = str(value or '').strip()
+              if value.startswith('{'):
+                  try:
+                      data = json.loads(value)
+                      if isinstance(data.get('keys'), list):
+                          for entry in data['keys']:
+                              if isinstance(entry, dict):
+                                  k = norm(entry.get('kid') or entry.get('keyId'))
+                                  if k: out.add(k)
+                      elif isinstance(data.get('keys'), dict):
+                          for k in data['keys']:
+                              k = norm(k)
+                              if k: out.add(k)
+                      elif data.get('kid'):
+                          k = norm(data.get('kid'))
+                          if k: out.add(k)
+                  except Exception:
+                      pass
+              for part in re.split(r'[;,\\s]+', value):
+                  if part.count(':') == 1:
+                      k = norm(part.split(':', 1)[0])
+                      if k: out.add(k)
+              return out
+          data = json.load(open(playlist_path, encoding='utf-8'))
+          channels = [c for c in data.get('channels', []) if str(c.get('name', '')).strip().lower() == 'tv360+' + channel]
+          candidates = [x for c in channels for x in c.get('candidates', [])]
+          candidates = [x for x in candidates if 'vmttv.dpdns.org' in str(x.get('url', '')) and '/tv360' in str(x.get('url', ''))]
+          key_kids = set()
+          drm_types = set()
+          for candidate in candidates:
+              drm = candidate.get('drm') or {}
+              if drm.get('type'): drm_types.add(str(drm['type']).lower())
+              key_kids |= kids_from_key(drm.get('key'))
+          try:
+              root = ET.parse(mpd_path).getroot()
+              mpd_kids = {norm(x) for x in re.findall(r'[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}', ' '.join(
+                  elem.attrib.get('{urn:mpeg:cenc:2013}default_KID', '') for elem in root.iter()))}
+              mpd_kids.discard('')
+              for elem in root.iter():
+                  kid = elem.attrib.get('{urn:mpeg:cenc:2013}default_KID', '')
+                  if kid:
+                      k = norm(kid)
+                      if k: mpd_kids.add(k)
+          except Exception as e:
+              mpd_kids = set()
+              print('KID_CHECK_PARSE_ERROR', type(e).__name__)
+          print('KID_MATCH_DIAGNOSTIC channel=TV360+' + channel,
+                'resolverCandidates=' + str(len(candidates)),
+                'drmTypes=' + (','.join(sorted(drm_types)) or 'none'),
+                'playlistKidCount=' + str(len(key_kids)),
+                'mpdKidCount=' + str(len(mpd_kids)),
+                'playlistKids=' + (','.join(sorted(key_kids)) or 'none'),
+                'mpdKids=' + (','.join(sorted(mpd_kids)) or 'none'),
+                'kidMatch=' + str(bool(key_kids & mpd_kids)).lower())
           PY
-          n=0
-          while IFS='|' read -r kind url; do
+          done
+
+
+      - name: Probe the paired event-feed media candidates
+        shell: bash
+        run: |
+          set -u
+          BASE='https://nm7-tv-web.phuongnm7-iptv.workers.dev'
+          for item in '13 10022 856f291af35a5db7b7d0c944b32993b9' '15 10024 fa4033841a70511c84a7fe7e0daf1a6a'; do
+            read -r display channel expected_kid <<< "$item"
+            UPSTREAM="https://dekki.bacbenny95.workers.dev/film4k/stream/channel/$channel"
+            echo "EVENT_FEED_CANDIDATE tv360=$display channel_id=$channel"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 1 -sS --max-time 25 -A 'Dalvik/2.1.0' -o "/tmp/event-direct-$channel.mpd" -w '%{http_code}' "$UPSTREAM" || true)"
+            python3 - "$display" "$expected_kid" "$code" "/tmp/event-direct-$channel.mpd" <<'PY'
+          import re,sys,xml.etree.ElementTree as ET
+          display,expected,status,path=sys.argv[1:]
+          try:
+              root=ET.parse(path).getroot()
+              kidset=set()
+              for e in root.iter():
+                  value=e.attrib.get('{urn:mpeg:cenc:2013}default_KID','').replace('-','').lower()
+                  if re.fullmatch(r'[0-9a-f]{32}',value): kidset.add(value)
+              print('EVENT_DIRECT_MANIFEST tv360='+display,'http='+status,
+                    'mpdKids='+(','.join(sorted(kidset)) or 'none'),
+                    'expectedKidMatch='+str(expected.lower() in kidset).lower())
+          except Exception as e:
+              print('EVENT_DIRECT_MANIFEST tv360='+display,'http='+status,
+                    'kind=unparseable','error='+type(e).__name__)
+          PY
+            ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$UPSTREAM")"
+            code="$(curl --retry 2 --retry-all-errors --retry-delay 1 -sS --max-time 30 -A 'Dalvik/2.1.0' -o "/tmp/event-proxy-$channel.mpd" -w '%{http_code}' "$BASE/api/stream?u=$ENC&ua=Dalvik%2F2.1.0" || true)"
+            python3 - "$display" "$expected_kid" "$code" "/tmp/event-proxy-$channel.mpd" <<'PY'
+          import re,sys,xml.etree.ElementTree as ET
+          display,expected,status,path=sys.argv[1:]
+          try:
+              root=ET.parse(path).getroot()
+              kidset=set()
+              for e in root.iter():
+                  value=e.attrib.get('{urn:mpeg:cenc:2013}default_KID','').replace('-','').lower()
+                  if re.fullmatch(r'[0-9a-f]{32}',value): kidset.add(value)
+              print('EVENT_PROXY_MANIFEST tv360='+display,'http='+status,
+                    'mpdKids='+(','.join(sorted(kidset)) or 'none'),
+                    'expectedKidMatch='+str(expected.lower() in kidset).lower())
+          except Exception as e:
+              print('EVENT_PROXY_MANIFEST tv360='+display,'http='+status,
+                    'kind=unparseable','error='+type(e).__name__)
+          PY
+          done
+
+
+      - name: Compare TV360 event KIDs across existing playlist feeds
+        shell: bash
+        run: |
+          set -u
+          i=0
+          while IFS='|' read -r label url; do
             [ -n "$url" ] || continue
-            n=$((n+1))
-            enc="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$url")"
-            curl -sS -L --max-time 20 -o "/tmp/p$n" -w "$kind HTTP=%{http_code} BYTES=%{size_download}
-" "$BASE/api/stream?u=$enc"
-          done < /tmp/proxy-segments.txt
+            i=$((i+1))
+            code="$(curl --retry 1 --retry-all-errors --retry-delay 1 -sS -L --max-time 30 -A 'Dalvik/2.1.0' -o "/tmp/tv360-feed-$i.m3u" -w '%{http_code}' "$url" || true)"
+            echo "FEED_CHECK name=$label http=$code bytes=$(wc -c < "/tmp/tv360-feed-$i.m3u" 2>/dev/null || echo 0)"
+            python3 - "$label" "/tmp/tv360-feed-$i.m3u" <<'PY'
+          import base64,json,re,sys
+          from urllib.parse import urlsplit
+          label,path=sys.argv[1:]
+          try: lines=open(path,encoding='utf-8',errors='replace').read().splitlines()
+          except OSError: raise SystemExit(0)
+          wanted={'41ce0eac12eb58f69607df0d2eaff649','fa4033841a70511c84a7fe7e0daf1a6a','856f291af35a5db7b7d0c944b32993b9','c305b22dfd6d55e3998ab279cc98e0d3'}
+          def norm(value):
+              value=str(value or '').strip().strip(chr(34)).strip(chr(39))
+              raw=value.replace('-','')
+              if re.fullmatch(r'[0-9a-fA-F]{32}',raw):return raw.lower()
+              try:
+                  raw64=value.replace('-','+').replace('_','/')
+                  raw64+='='*((-len(raw64))%4)
+                  data=base64.b64decode(raw64)
+                  if len(data)==16:return data.hex()
+              except Exception:pass
+              return ''
+          def extract_kids(value):
+              text=str(value or '').strip();kids=[]
+              if text.startswith('{'):
+                  try:
+                      data=json.loads(text)
+                      if isinstance(data.get('keys'),list):
+                          for item in data['keys']:
+                              if isinstance(item,dict):
+                                  kid=norm(item.get('kid') or item.get('keyId'))
+                                  if kid:kids.append(kid)
+                      elif isinstance(data.get('keys'),dict):
+                          for kid in data['keys']:
+                              kid=norm(kid)
+                              if kid:kids.append(kid)
+                      if data.get('kid'):
+                          kid=norm(data.get('kid'))
+                          if kid:kids.append(kid)
+                  except Exception:pass
+              else:
+                  for part in re.split(r'[;,\\\\s]+',text):
+                      if part.count(':')==1:
+                          kid=norm(part.split(':',1)[0])
+                          if kid:kids.append(kid)
+              return sorted(set(kids))
+          entry=None
+          def emit(e):
+              if not e:return
+              name=e.get('name','');group=e.get('group','');kids=e.get('kids',[])
+              is_tv360='tv360' in group.lower() or re.search(r'tv360\\s*\\+\\s*\\d{1,2}',name,re.I) or re.search(r'tv360plus\\s*\\d{1,2}',name,re.I)
+              if not (is_tv360 or any(k in wanted for k in kids)):return
+              host=pathpart=''
+              try:
+                  u=urlsplit(e.get('url',''));host=u.hostname or '';pathpart=u.path or ''
+              except Exception:pass
+              safe_name=re.sub(r'\\s+',' ',name)[:120]
+              print('SOURCE_ENTRY feed='+label,'group='+re.sub(r'\\s+',' ',group)[:50],
+                    'name='+safe_name,'kids='+(','.join(kids) or 'none'),
+                    'host='+(host or 'none'),'path='+(pathpart or 'none'))
+          for line in lines:
+              line=line.strip()
+              if line.startswith('#EXTINF:'):
+                  emit(entry)
+                  header=line.split(',',1)[0]
+                  name=line.split(',',1)[1].strip() if ',' in line else ''
+                  entry={'name':name,'group':(re.search(r'group-title="([^"]*)"',header,re.I) or [None,''])[1],
+                         'tvgid':(re.search(r'tvg-id="([^"]*)"',header,re.I) or [None,''])[1],
+                         'url':'','kids':[],'manifest':''}
+              elif entry and line.startswith('#KODIPROP:'):
+                  m=re.search(r'license_key=(.+)',line,re.I)
+                  if m:entry['kids']=extract_kids(m.group(1).strip())
+                  m=re.search(r'manifest_type=(.+)',line,re.I)
+                  if m:entry['manifest']=m.group(1).strip()
+              elif entry and line and not line.startswith('#') and line.startswith(('http://','https://')):
+                  entry['url']=line.split('|',1)[0]
+                  emit(entry);entry=None
+          emit(entry)
+          PY
+          done <<'FEEDS'
+          vmttv-custom|https://raw.githubusercontent.com/vuminhthanh12/vuminhthanh12/refs/heads/main/vmttv
+          nm7-vapp-playlist|https://raw.githubusercontent.com/phuongnm7/Iptv-phuongnm7/main/IPTV_Gop_VMTTV_vAppTV.m3u
+          iptv-live-merge|https://iptv-live-merge.phuongnm7-iptv.workers.dev/playlist.m3u
+          phuongnm7-playlist|https://phuongnm7-playlist.phuongnm7-iptv.workers.dev/
+          FEEDS
