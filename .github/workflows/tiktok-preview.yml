@@ -9,7 +9,9 @@ on:
       - main
     paths:
       - "web-tv/**"
+      - "worker.js"
       - "scripts/test-tiktok-tab.js"
+      - "scripts/test-tiktok-tab-e2e.mjs"
       - "wrangler.tiktok-preview.toml"
       - ".github/workflows/tiktok-preview.yml"
   workflow_dispatch:
@@ -100,6 +102,15 @@ jobs:
           print('TIKTOK_PREVIEW_IPTV_API_OK channels='+str(len(channels)))
           PY
           echo "NM7_TIKTOK_ISOLATED_PREVIEW_SMOKE_OK"
+          curl -fsSL --max-time 20 "$BASE/api/tiktok/config?__smoke=$(date +%s)" -o /tmp/nm7-tiktok-config.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config=json.loads(Path('/tmp/nm7-tiktok-config.json').read_text(encoding='utf-8'))
+          if not isinstance(config.get('configured'), bool): raise SystemExit('TIKTOK_CONFIG_STATUS_MISSING')
+          if not isinstance(config.get('missing'), list): raise SystemExit('TIKTOK_CONFIG_MISSING_LIST')
+          print('TIKTOK_OAUTH_CONFIG_ROUTE_OK configured='+str(config['configured'])+' missing='+str(len(config['missing'])))
+          PY
 
       - name: Install Chromium for TikTok browser E2E
         shell: bash
