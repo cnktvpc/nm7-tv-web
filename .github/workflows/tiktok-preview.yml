@@ -16,9 +16,13 @@ on:
       - ".github/workflows/tiktok-preview.yml"
   workflow_dispatch:
 
+# Each run validates the exact commit independently. Older Chromium E2E
+# jobs can stall on hosted-runner setup; don't leave the latest preview pending
+# behind an older run. Preview deployments in this branch use the same isolated
+# Worker and no production environment.
 concurrency:
-  group: nm7-tiktok-preview-${{ github.ref }}
-  cancel-in-progress: true
+  group: nm7-tiktok-preview-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
