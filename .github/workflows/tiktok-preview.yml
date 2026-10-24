@@ -100,3 +100,17 @@ jobs:
           print('TIKTOK_PREVIEW_IPTV_API_OK channels='+str(len(channels)))
           PY
           echo "NM7_TIKTOK_ISOLATED_PREVIEW_SMOKE_OK"
+
+      - name: Install Chromium for TikTok browser E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.1
+          npx playwright install --with-deps chromium
+
+      - name: Exercise TikTok UI and remote controls in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-tiktok-tab-e2e.mjs
