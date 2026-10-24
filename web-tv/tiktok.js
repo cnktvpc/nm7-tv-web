@@ -2,7 +2,7 @@
 'use strict';
 var KEY='nm7.tiktok.videos.v1',PLAYER_ORIGIN='https://www.tiktok.com';
 var DEFAULT_VIDEO={id:'6718335390845095173',url:'https://www.tiktok.com/@scout2015/video/6718335390845095173',title:'Video mẫu TikTok'};
-var state={active:false,videos:[],index:0,loadedId:'',oldHomeTitle:'',touchY:0,playing:false};
+var state={active:false,videos:[],index:0,loadedId:'',oldHomeTitle:'',touchY:0,lastSwipeAt:0,playing:false};
 function byId(id){return document.getElementById(id)}
 function escapeHtml(value){return String(value==null?'':value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function setStatus(message){var el=byId('tiktokStatus');if(el)el.textContent=String(message||'')}
@@ -143,8 +143,8 @@ function handleRemoteKey(e){
 function bindSwipeRail(id){
  var rail=byId(id);if(!rail||rail.dataset.tiktokSwipeBound==='1')return;rail.dataset.tiktokSwipeBound='1';
  rail.addEventListener('touchstart',function(e){var t=e.touches&&e.touches[0];state.touchY=t?Number(t.clientY):0},{passive:true});
- rail.addEventListener('touchend',function(e){var t=e.changedTouches&&e.changedTouches[0];if(!t)return;var delta=state.touchY-Number(t.clientY);if(Math.abs(delta)<32)return;if(delta>0)next();else previous()},{passive:true});
- rail.addEventListener('click',function(){if(id==='tiktokSwipeNext')next();else previous()});
+ rail.addEventListener('touchend',function(e){var t=e.changedTouches&&e.changedTouches[0];if(!t)return;var delta=state.touchY-Number(t.clientY);if(Math.abs(delta)<32)return;state.lastSwipeAt=Date.now();if(delta>0)next();else previous()},{passive:true});
+ rail.addEventListener('click',function(){if(Date.now()-state.lastSwipeAt<500)return;if(id==='tiktokSwipeNext')next();else previous()});
 }
 function initialize(){
  var tab=byId('btnTikTokTab');if(tab)tab.addEventListener('click',enter);
