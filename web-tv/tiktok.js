@@ -230,6 +230,13 @@ function bindGestureLayer(){
  layer.addEventListener('touchmove',function(e){if(state.active&&state.mobile&&start&&e.cancelable)e.preventDefault()},{passive:false});
  layer.addEventListener('click',function(e){if(!state.active||!state.mobile||isRelevantGestureTarget(e.target))return;e.preventDefault();e.stopPropagation()});
 }
+function bindSwipeRail(id){
+ var rail=byId(id);if(!rail||rail.dataset.tiktokSwipeBound==='1')return;rail.dataset.tiktokSwipeBound='1';
+ var touchY=0,lastSwipeAt=0;
+ rail.addEventListener('touchstart',function(e){var t=e.touches&&e.touches[0];touchY=t?Number(t.clientY):0},{passive:true});
+ rail.addEventListener('touchend',function(e){var t=e.changedTouches&&e.changedTouches[0];if(!t)return;var delta=touchY-Number(t.clientY);if(Math.abs(delta)<32)return;lastSwipeAt=Date.now();if(delta>0)next();else previous()},{passive:true});
+ rail.addEventListener('click',function(){if(Date.now()-lastSwipeAt<500)return;if(id==='tiktokSwipeNext')next();else previous()});
+}
 function handleRemoteKey(e){
  if(!state.active||!e)return false;
  var k=Number(e.keyCode||e.which||0),key=String(e.key||'').toLowerCase(),code=String(e.code||'').toLowerCase();
@@ -280,7 +287,7 @@ function initialize(){
  bindSwipeRail('tiktokSwipePrev');bindSwipeRail('tiktokSwipeNext');readVideos();renderQueue();updateControls();bindGestureLayer();
  if(byId('tiktokMobileBack'))byId('tiktokMobileBack').addEventListener('click',function(){leave(true)});
  if(byId('tiktokMobileSearch'))byId('tiktokMobileSearch').addEventListener('click',openAddSheet);
- if(byId('tiktokMobileLogin'))byId('tiktokMobileLogin').addEventListener('click',function(){if(state.authenticated&&state.mode==='account'){setMobileNotice('Tài khoản TikTok',state.profile&&state.profile.display_name?'Đã đăng nhập: '+state.profile.display_name:'Đã liên kết tài khoản TikTok.',false)}else loginTikTok()});
+ if(byId('tiktokMobileLogin'))byId('tiktokMobileLogin').addEventListener('click',function(){if(state.authenticated){setMobileNotice('Tài khoản TikTok',state.profile&&state.profile.display_name?'Đã đăng nhập: '+state.profile.display_name:'Đã liên kết tài khoản TikTok.',false)}else loginTikTok()});
  if(byId('tiktokModeRecommend'))byId('tiktokModeRecommend').addEventListener('click',function(){switchMode('recommend')});
  if(byId('tiktokModeAccount'))byId('tiktokModeAccount').addEventListener('click',function(){switchMode('account')});
  if(byId('tiktokNavHome'))byId('tiktokNavHome').addEventListener('click',function(){switchMode('recommend')});
@@ -297,6 +304,7 @@ function initialize(){
  if(byId('tiktokMobileFullscreen'))byId('tiktokMobileFullscreen').addEventListener('click',fullscreen);
  if(byId('tiktokAddCancel'))byId('tiktokAddCancel').addEventListener('click',closeAddSheet);
  if(byId('tiktokNoticeClose'))byId('tiktokNoticeClose').addEventListener('click',closeMobileNotice);
+ if(byId('tiktokMobileLogout'))byId('tiktokMobileLogout').addEventListener('click',async function(){try{await fetch('/api/tiktok/logout',{method:'POST',credentials:'same-origin'})}catch(e){}state.authenticated=false;state.profile=null;state.accountVideos=[];state.mode='recommend';state.index=0;state.loadedId='';closeMobileNotice();loadCurrent(true);updateControls();setStatus('Đã đăng xuất TikTok.')});
  if(byId('tiktokSetupDocs'))byId('tiktokSetupDocs').addEventListener('click',function(){window.open('https://developers.tiktok.com/docs/en/login-kit-web','_blank')});
  window.addEventListener('message',function(event){
   var frame=byId('tiktokFrame');if(!frame||event.origin!==PLAYER_ORIGIN||event.source!==frame.contentWindow)return;
