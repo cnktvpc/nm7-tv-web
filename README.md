@@ -1,3 +1,12 @@
+## TikTok tab — isolated preview (24/10/2026; not production)
+
+- Added a separate TikTok tab to NM7 TV Web using TikTok's official Embed Player URL format. IPTV playback, M3U playlists, DRM and Worker production configuration remain separate.
+- Users can paste public TikTok post URLs into a per-device list, switch between saved videos, remove entries, and open a post on TikTok. The starter item is the public example from TikTok's Embed Player documentation; it is a smoke-test seed, not a personalized For You feed.
+- Only one embedded TikTok iframe is active at a time. Leaving TikTok clears the iframe to prevent background playback. Input accepts full URLs on TikTok domains with a numeric video ID; shortened share links without an expanded video ID must first be opened and copied as a full video URL.
+- TV remote support: Back returns to NM7; Up/Down changes videos; Left/Right moves between controls. Touch devices have swipe rails beside the embed. NM7 cannot intercept swipe gestures *inside* the cross-origin iframe, so the embedded player keeps its own interactions.
+- Preview branch: `feat/tiktok-tab-preview-20261024`. A dedicated Worker uses `wrangler.tiktok-preview.toml`; it must not replace the production Worker. This change is not merged into `main` and is not a production release until CI, preview smoke tests and real-device checks pass.
+- TikTok For You recommendations are not implemented. Phase one plays a user-managed list using the official embed. Automatic public-feed discovery requires a separate approved API/source and review.
+
 ## Cập nhật tiếp tục điều tra TV360+15 — 22/10/2026 (trạng thái chưa phát hành)
 
 - Nhánh tiếp tục sử dụng: `fix/tv360-probe-http-recovery-20261022`; PR [#24](https://github.com/cnktvpc/nm7-tv-web/pull/24) vẫn mở. Các commit trong đợt sửa tiếp theo: [9296fc4](https://github.com/cnktvpc/nm7-tv-web/commit/9296fc49094b0fa0f00494c70a98f1dec27a9b0e), [ff09b4d](https://github.com/cnktvpc/nm7-tv-web/commit/ff09b4d555ecf2dc14675c6c637462bb933aefe7), [fd2ce2f](https://github.com/cnktvpc/nm7-tv-web/commit/fd2ce2f8a0cc372b59739da7a6c1e721ab96e2b2). Các thay đổi sửa escape newline ở những runtime đang dùng và đồng bộ assertion cache-buster.
