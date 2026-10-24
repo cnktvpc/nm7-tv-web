@@ -8,7 +8,7 @@ const html=read('web-tv/index.html');
 const tiktok=read('web-tv/tiktok.js');
 const config=read('wrangler.tiktok-preview.toml');
 const worker=read('worker.js');
-for(const marker of ['id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','id="tiktokAddForm"','id="tiktokMobileHeader"','id="tiktokGestureLayer"','id="tiktokMobileNav"','id="tiktokAddSheet"','tiktok.js?v=20261024-tiktok-mobile-v3'])assert.ok(html.includes(marker),'missing TikTok UI marker: '+marker);
+for(const marker of ['id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','id="tiktokAddForm"','id="tiktokMobileHeader"','id="tiktokGestureLayer"','id="tiktokMobileNav"','id="tiktokAddSheet"','tiktok.js?v=20261024-tiktok-official-v1'])assert.ok(html.includes(marker),'missing TikTok UI marker: '+marker);
 for(const marker of ["PLAYER_ORIGIN+'/player/v1/'","function parseVideoUrl(value)","event.origin!==PLAYER_ORIGIN","event.source!==frame.contentWindow","window.NM7PlayerBridge.openTikTok","localStorage","tiktokSwipeNext","function handleRemoteKey(e)"])assert.ok(tiktok.includes(marker),'missing TikTok behavior marker: '+marker);
 for(const [name,path] of [['mobile','web-tv/app-safari-policy-mobile-controls.js'],['pc','web-tv/app-safari-policy-pc-controls.js'],['app','web-tv/app.js'],['legacy','web-tv/app-safari-policy.js']]){
  const source=read(path);
@@ -23,6 +23,9 @@ for(const endpoint of ['/api/tiktok/config','/api/tiktok/oauth/start','/api/tikt
 for(const item of ['TIKTOK_CLIENT_KEY','TIKTOK_CLIENT_SECRET','TIKTOK_SESSION_SECRET','user.info.basic,video.list','TIKTOK_STATE_COOKIE','AES-GCM'])assert.ok(worker.includes(item),'missing server-side TikTok auth guard: '+item);
 for(const item of ['tiktokMobileLike','tiktokMobileComment','tiktokMobileBookmark','tiktokMobileShare','tiktokMobileMute','tiktokMobileFullscreen'])assert.ok(tiktok.includes(item),'missing mobile interaction: '+item);
 assert.ok(tiktok.includes('function bindSwipeRail(id)'), 'desktop touch rail binding must be defined');
+assert.ok(tiktok.includes('function openOfficialTikTokMobile()'), 'mobile must hand off to official TikTok');
+assert.ok(tiktok.includes("window.location.assign(officialUrl)"), 'mobile must navigate to official TikTok origin');
+assert.ok(tiktok.includes('if(state.mobile){openOfficialTikTokMobile();return}'), 'mobile must not use imitation embed feed');
 assert.ok(tiktok.includes('tiktokMobileLogout'), 'account logout action must be wired');
 assert.ok(tiktok.includes("logoutButton.style.display=state.authenticated?'':'none'"), 'logout visibility must follow authenticated session');
 const listeners={};
