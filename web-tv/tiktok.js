@@ -249,10 +249,21 @@ function handleRemoteKey(e){
  if(key==='arrowright'||key==='right'||k===22){e.preventDefault();e.stopPropagation();next();return true}
  return false;
 }
+function openOfficialTikTokMobile(){
+ // The official TikTok For You page is a first-party app link. Navigating in the
+ // same tab allows Android/iOS to hand off to the installed TikTok app when the
+ // OS permits; otherwise the real TikTok mobile website loads. Browser Back
+ // returns to the existing NM7 page. Do not try to iframe / mimic this surface.
+ if(window.NM7PlayerBridge&&typeof window.NM7PlayerBridge.openTikTok==='function')window.NM7PlayerBridge.openTikTok();
+ var officialUrl='https://www.tiktok.com/foryou?lang=vi-VN';
+ window.location.assign(officialUrl);
+}
 function enter(){
  if(state.active)return;
+ state.mobile=isMobileDevice();
+ if(state.mobile){openOfficialTikTokMobile();return}
  if(window.NM7PlayerBridge&&typeof window.NM7PlayerBridge.openTikTok==='function')window.NM7PlayerBridge.openTikTok();
- state.active=true;state.mobile=isMobileDevice();
+ state.active=true;
  var rows=byId('homeRows'),live=byId('liveView'),view=byId('tiktokView'),title=byId('homeTitle'),tab=byId('btnTikTokTab');
  if(rows)rows.classList.add('hidden');if(live)live.classList.add('hidden');if(view)view.classList.remove('hidden');
  if(title){state.oldHomeTitle=title.textContent||'';title.textContent='TikTok'}
@@ -316,6 +327,6 @@ function initialize(){
   else if(data.type==='onPlayerError'){var detail=data.value&&data.value.errorType?String(data.value.errorType):'lỗi trình phát';setStatus('TikTok không phát được video ('+detail+'). Hãy thử video khác hoặc mở TikTok gốc.')}
  });
 }
-window.NM7TikTok={enter:enter,leave:leave,isActive:function(){return state.active},handleRemoteKey:handleRemoteKey,parseVideoUrl:parseVideoUrl,loadAccountVideos:loadAccountVideos};
+window.NM7TikTok={enter:enter,leave:leave,isActive:function(){return state.active},handleRemoteKey:handleRemoteKey,parseVideoUrl:parseVideoUrl,loadAccountVideos:loadAccountVideos,openOfficialTikTokMobile:openOfficialTikTokMobile};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize);else initialize();
 })();
