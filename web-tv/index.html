@@ -25,6 +25,45 @@ button{cursor:pointer}
 
 #btnLiveTab{height:52px;margin-left:3px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;gap:6px;outline:none;font-size:16px;font-weight:700;white-space:nowrap}
 #btnLiveTab:focus{outline:3px solid #37d6a6;background:#ffffff18}
+
+#btnTikTokTab{height:52px;margin-left:3px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;outline:none;font-size:15px;font-weight:700;white-space:nowrap;flex-shrink:0}
+#btnTikTokTab:focus,#btnTikTokTab.tiktok-tab-active{outline:3px solid #37d6a6;background:#ffffff18}
+#tiktokView{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;align-items:center;overflow:hidden;padding:4px 6px 8px;gap:6px;color:#f5f7fa}
+#tiktokToolbar{width:min(100%,900px);display:flex;gap:6px;align-items:center;flex:0 0 auto}
+#tiktokAddForm{display:flex;gap:6px;flex:1;min-width:0;margin:0}
+#tiktokUrl{flex:1;min-width:0;height:38px;border:1px solid #526072;border-radius:8px;background:#111923;color:#fff;padding:0 10px;font-size:14px}
+.tiktok-btn{min-height:36px;padding:5px 11px;border:1px solid #566477;border-radius:8px;background:#182331;color:#f5f7fa;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer}
+.tiktok-btn:focus,.tiktok-queue-item:focus{outline:3px solid #37d6a6;background:#26394b}
+#tiktokPlayerRow{position:relative;display:flex;align-items:stretch;justify-content:center;gap:4px;min-height:0;flex:1 1 auto;width:100%}
+#tiktokFrameWrap{position:relative;height:100%;max-height:calc(100vh - 180px);aspect-ratio:9/16;width:auto;max-width:calc(100% - 68px);background:#050505;border-radius:10px;overflow:hidden;border:1px solid #344151}
+#tiktokFrame{width:100%;height:100%;border:0;display:block;background:#000}
+.tiktok-swipe-rail{display:flex;flex:0 1 34px;min-width:26px;max-width:48px;align-items:center;justify-content:center;align-self:center;height:72%;border-radius:9px;background:#ffffff08;color:#dce5ee;font-size:24px;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:pointer}
+#tiktokEmpty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;background:#080d14;color:#dce5ee;font-size:15px;line-height:1.5}
+#tiktokEmpty.hidden{display:none!important}
+#tiktokActionBar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;width:min(100%,900px);flex:0 0 auto}
+#tiktokStatus{font-size:12px;color:#aab8c8;flex:1;min-width:160px;text-align:center}
+#tiktokQueue{display:flex;gap:6px;align-items:center;overflow-x:auto;max-width:100%;width:min(100%,900px);flex:0 0 auto;padding:2px;scrollbar-width:thin}
+.tiktok-queue-item{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #455266;border-radius:16px;background:#101721;color:#dce5ee;padding:5px 10px;font-size:12px;flex:0 0 auto}
+.tiktok-queue-item[aria-current="true"]{border-color:#37d6a6;background:#17352f;color:#fff}
+.tiktok-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media screen and (max-width:1024px) and (pointer:coarse){
+ #btnTikTokTab{height:46px;padding:0 5px;font-size:12px;min-width:56px}
+ #tiktokView{padding:2px 2px calc(6px + env(safe-area-inset-bottom,0px));gap:4px}
+ #tiktokToolbar{gap:4px}
+ #tiktokUrl{height:34px;padding:0 7px;font-size:12px}
+ .tiktok-btn{min-height:32px;padding:4px 7px;font-size:11px}
+ #tiktokFrameWrap{max-height:calc(100vh - 215px);max-width:calc(100% - 52px)}
+ .tiktok-swipe-rail{min-width:22px;max-width:28px;font-size:20px}
+ #tiktokStatus{min-width:100%;font-size:11px}
+ #tiktokQueue{gap:4px}
+}
+@media screen and (orientation:landscape) and (max-height:600px){
+ #tiktokFrameWrap{max-height:calc(100vh - 150px)}
+ #tiktokQueue{display:none}
+ #tiktokView{gap:3px;padding-top:2px;padding-bottom:3px}
+ #tiktokActionBar{gap:3px}
+}
+
 #liveView{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:0 4px 8px;gap:6px}
 #liveHeader{flex:0 0 auto;display:flex;align-items:center;gap:12px;min-height:50px;padding:4px 6px 2px}
 #liveHeader h1{font-size:22px;line-height:1.2;margin:0;font-weight:800;white-space:nowrap}
@@ -320,10 +359,39 @@ body.mobile-mode #playerTop{padding-right:calc(64px + env(safe-area-inset-right,
 <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.2/dist/mpegts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/shaka-player@5.2.12/dist/shaka-player.compiled.js"></script>
+<script src="./tiktok.js?v=20261024-tiktok-mvp1"></script>
 </head>
 <body id="nm7-body" tabindex="-1">
 <div id="app">
-  <main id="home"><div id="homeTabs"><button id="mobileMenuBtn" type="button" tabindex="-1" aria-label="Mở menu">☰</button><button id="btnYouTubeTab" type="button" tabindex="-1"><span class="youtubeMark">▶</span><span>YouTube</span></button><button id="btnLiveTab" type="button" tabindex="-1" aria-label="Mở mục Live">⚽ LIVE</button><button id="btnNewsTab" type="button" tabindex="-1" aria-label="Mở Bản tin">▣ Bản tin</button><button id="appShortcut" type="button" tabindex="-1"><img id="shortcutIcon" src="/assets/nm7-main-logo.png" alt=""><span id="shortcutLabel">Chọn ứng dụng</span></button><div id="homeTitle" aria-hidden="true"></div></div><div id="homeRows"><div class="empty">Đang tải danh sách kênh…</div></div><section id="liveView" class="hidden" aria-label="Sự kiện LIVE"><header id="liveHeader"><h1>⚽ LIVE</h1><div id="liveStatus" role="status" aria-live="polite">Đang chờ dữ liệu Live…</div><button id="liveRefresh" type="button">↻ Làm mới</button></header><div id="liveEvents" role="list" aria-label="Danh sách sự kiện Live"></div></section></main>
+  <main id="home"><div id="homeTabs"><button id="mobileMenuBtn" type="button" tabindex="-1" aria-label="Mở menu">☰</button><button id="btnYouTubeTab" type="button" tabindex="-1"><span class="youtubeMark">▶</span><span>YouTube</span></button><button id="btnTikTokTab" type="button" tabindex="-1" aria-label="Mở TikTok">♪ TikTok</button><button id="btnLiveTab" type="button" tabindex="-1" aria-label="Mở mục Live">⚽ LIVE</button><button id="btnNewsTab" type="button" tabindex="-1" aria-label="Mở Bản tin">▣ Bản tin</button><button id="appShortcut" type="button" tabindex="-1"><img id="shortcutIcon" src="/assets/nm7-main-logo.png" alt=""><span id="shortcutLabel">Chọn ứng dụng</span></button><div id="homeTitle" aria-hidden="true"></div></div><div id="homeRows"><div class="empty">Đang tải danh sách kênh…</div></div><section id="liveView" class="hidden" aria-label="Sự kiện LIVE"><header id="liveHeader"><h1>⚽ LIVE</h1><div id="liveStatus" role="status" aria-live="polite">Đang chờ dữ liệu Live…</div><button id="liveRefresh" type="button">↻ Làm mới</button></header><div id="liveEvents" role="list" aria-label="Danh sách sự kiện Live"></div></section>
+    <section id="tiktokView" class="hidden" aria-label="TikTok">
+    <div id="tiktokToolbar">
+      <form id="tiktokAddForm" autocomplete="off">
+        <label class="tiktok-sr-only" for="tiktokUrl">Đường dẫn video TikTok</label>
+        <input id="tiktokUrl" type="url" inputmode="url" placeholder="Dán link video TikTok công khai…" aria-label="Dán link video TikTok công khai">
+        <button class="tiktok-btn" id="tiktokAddBtn" type="submit">＋ Thêm</button>
+      </form>
+      <button class="tiktok-btn" id="tiktokHomeBtn" type="button" aria-label="Trở về NM7">⌂ NM7</button>
+    </div>
+    <div id="tiktokPlayerRow">
+      <button id="tiktokSwipePrev" class="tiktok-swipe-rail" type="button" aria-label="Video trước; vuốt xuống để quay lại">↓</button>
+      <div id="tiktokFrameWrap">
+        <iframe id="tiktokFrame" src="about:blank" title="Trình phát video TikTok" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        <div id="tiktokEmpty" class="hidden" role="status">Chưa có video để phát.<br>Hãy dán đường dẫn video TikTok công khai ở ô phía trên.</div>
+      </div>
+      <button id="tiktokSwipeNext" class="tiktok-swipe-rail" type="button" aria-label="Video tiếp; vuốt lên để xem tiếp">↑</button>
+    </div>
+    <div id="tiktokActionBar">
+      <button class="tiktok-btn" id="tiktokPrev" type="button">↓ Video trước</button>
+      <button class="tiktok-btn" id="tiktokToggle" type="button">▶ Phát / tạm dừng</button>
+      <button class="tiktok-btn" id="tiktokNext" type="button">↑ Video tiếp</button>
+      <button class="tiktok-btn" id="tiktokOpen" type="button">Mở TikTok gốc ↗</button>
+      <button class="tiktok-btn" id="tiktokRemove" type="button">Xóa video</button>
+      <span id="tiktokStatus" role="status" aria-live="polite">Video được phát trực tiếp từ TikTok.</span>
+    </div>
+    <div id="tiktokQueue" aria-label="Danh sách video TikTok"></div>
+  </section>
+  </main>
   <section id="player" class="hidden">
     <button id="playerFullscreenBtn" type="button" aria-label="Toàn màn hình" title="Toàn màn hình" aria-pressed="false"><span id="playerFullscreenIcon" aria-hidden="true">⛶</span><span class="fullscreenLabel">Toàn màn hình</span></button>
     <div id="playerTop"><div id="playerTitle"></div><div id="playerMeta"></div></div>
