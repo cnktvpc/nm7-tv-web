@@ -90,8 +90,9 @@ function removeCurrent(){
 }
 function openOriginal(){
  var v=current();if(!v)return;var opened=null;
- try{opened=window.open(v.url,'_blank','noopener,noreferrer')}catch(e){}
- if(!opened)window.location.href=v.url;
+ try{opened=window.open(v.url,'_blank')}catch(e){}
+ if(opened){try{opened.opener=null}catch(e){}return}
+ window.location.href=v.url;
 }
 function enter(){
  if(state.active)return;
