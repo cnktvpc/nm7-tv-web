@@ -456,7 +456,7 @@ function logoSource(c){
 }
 
 function renderMenu(){
- var labels=['⌂  Trang chính','▶  YouTube gốc · AdBlock','⌕  Tìm kiếm kênh','TV  Tất cả các kênh','▣  Truyền hình','⚽  Thể thao','★  Yêu thích','◷  Gần đây','+  Thêm nguồn','☷  Chỉnh sửa nguồn','↻  Tải lại nguồn','▣  Bản tin · Highlights / Xem lại','⚽  LIVE · Sự kiện đang phát'];
+ var labels=['⌂  Trang chính','▶  YouTube gốc · AdBlock','⌕  Tìm kiếm kênh','TV  Tất cả các kênh','▣  Truyền hình','⚽  Thể thao','★  Yêu thích','◷  Gần đây','+  Thêm nguồn','☷  Chỉnh sửa nguồn','↻  Tải lại nguồn','▣  Bản tin · Highlights / Xem lại','⚽  LIVE · Sự kiện đang phát','♪  TikTok · Video ngắn'];
  var menu=$('sideList'),html='';
  for(var i=0;i<labels.length;i++)html+='<button class="menuBtn" type="button" tabindex="'+(i===S.menu?'0':'-1')+'" data-menu="'+i+'">'+labels[i]+'</button>';
  menu.innerHTML=html;
@@ -477,6 +477,7 @@ function selectMenu(){
  var p=S.menu;
  if(p!==0&&p!==12&&S.livePlaybackContext&&S.player){closePlayer();if(window.NM7LiveUI)window.NM7LiveUI.leave(false)}
  if(p===12){if(S.player)closePlayer();closeMenu();if(window.NM7LiveUI)window.NM7LiveUI.enter();return}
+ if(p===13){if(S.player)closePlayer();if(S.liveSectionActive&&!S.player&&window.NM7LiveUI)window.NM7LiveUI.leave(false);closeMenu();if(window.NM7TikTok)window.NM7TikTok.enter();return}
  if(p!==0&&S.liveSectionActive&&!S.player&&window.NM7LiveUI)window.NM7LiveUI.leave(false);
  if(p===0){closeMenu();return}
  if(p===1){openYouTube();return}
@@ -2138,6 +2139,7 @@ function onKey(e){
  var rk=remoteCode(e);
  if(!(rk===37||rk===38||rk===39||rk===40||rk===13||rk===10009||rk===27||rk===461||rk===8))return;
  try{Object.defineProperty(e,'__nm7Handled',{value:true,configurable:true})}catch(_){e.__nm7Handled=true}
+ if(window.NM7TikTok&&window.NM7TikTok.isActive&&window.NM7TikTok.isActive()&&window.NM7TikTok.handleRemoteKey&&window.NM7TikTok.handleRemoteKey(e))return;
  if(S.player && (e.keyCode||e.which||0)===13) restoreAudio();
  var k=remoteCode(e);
  if(window.NM7LiveUI&&window.NM7LiveUI.isDialogOpen&&window.NM7LiveUI.isDialogOpen()&&window.NM7LiveUI.handleRemoteKey(e,k))return;
@@ -2307,6 +2309,8 @@ function startup(){
  loadSource('tv',false,S.tvPreset);
 }
 window.NM7PlayerBridge={
+ openTikTok:function(){if(S.player)closePlayer();if(S.liveSectionActive&&!S.player&&window.NM7LiveUI)window.NM7LiveUI.leave(false);return true},
+ returnFromTikTok:function(){S.zone='home';if(S.list.length)focusHome(true);return true},
  setLiveActive:function(active){S.liveSectionActive=!!active;if(!active&&!S.player)S.livePlaybackContext=null},
  playLive:function(eventId){
   if(!window.NM7LiveUI)return;
