@@ -8,7 +8,7 @@ const html=read('web-tv/index.html');
 const tiktok=read('web-tv/tiktok.js');
 const config=read('wrangler.tiktok-preview.toml');
 const worker=read('worker.js');
-for(const marker of ['id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','id="tiktokAddForm"','id="tiktokMobileHeader"','id="tiktokGestureLayer"','id="tiktokMobileNav"','id="tiktokAddSheet"','tiktok.js?v=20261024-tiktok-mobile-v2'])assert.ok(html.includes(marker),'missing TikTok UI marker: '+marker);
+for(const marker of ['id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','id="tiktokAddForm"','id="tiktokMobileHeader"','id="tiktokGestureLayer"','id="tiktokMobileNav"','id="tiktokAddSheet"','tiktok.js?v=20261024-tiktok-mobile-v3'])assert.ok(html.includes(marker),'missing TikTok UI marker: '+marker);
 for(const marker of ["PLAYER_ORIGIN+'/player/v1/'","function parseVideoUrl(value)","event.origin!==PLAYER_ORIGIN","event.source!==frame.contentWindow","window.NM7PlayerBridge.openTikTok","localStorage","tiktokSwipeNext","function handleRemoteKey(e)"])assert.ok(tiktok.includes(marker),'missing TikTok behavior marker: '+marker);
 for(const [name,path] of [['mobile','web-tv/app-safari-policy-mobile-controls.js'],['pc','web-tv/app-safari-policy-pc-controls.js'],['app','web-tv/app.js'],['legacy','web-tv/app-safari-policy.js']]){
  const source=read(path);
@@ -24,6 +24,7 @@ for(const item of ['TIKTOK_CLIENT_KEY','TIKTOK_CLIENT_SECRET','TIKTOK_SESSION_SE
 for(const item of ['tiktokMobileLike','tiktokMobileComment','tiktokMobileBookmark','tiktokMobileShare','tiktokMobileMute','tiktokMobileFullscreen'])assert.ok(tiktok.includes(item),'missing mobile interaction: '+item);
 assert.ok(tiktok.includes('function bindSwipeRail(id)'), 'desktop touch rail binding must be defined');
 assert.ok(tiktok.includes('tiktokMobileLogout'), 'account logout action must be wired');
+assert.ok(tiktok.includes("logoutButton.style.display=state.authenticated?'':'none'"), 'logout visibility must follow authenticated session');
 const listeners={};
 const fakeWindow={addEventListener:(name,fn)=>{(listeners[name]||(listeners[name]=[])).push(fn)},location:{href:'https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/'}};
 const fakeDocument={readyState:'loading',addEventListener:(name,fn)=>{(listeners['document:'+name]||(listeners['document:'+name]=[])).push(fn)}};
