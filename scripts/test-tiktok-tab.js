@@ -7,7 +7,7 @@ const read=p=>fs.readFileSync(process.cwd()+'/'+p,'utf8');
 const html=read('web-tv/index.html');
 const tiktok=read('web-tv/tiktok.js');
 const config=read('wrangler.tiktok-preview.toml');
-for(const marker of ['id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','id="tiktokAddForm"','tiktok.js?v=20261024-tiktok-mvp2'])assert.ok(html.includes(marker),'missing TikTok UI marker: '+marker);
+for(const marker of ['id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','id="tiktokAddForm"','tiktok.js?v=20261024-tiktok-mobile-v1'])assert.ok(html.includes(marker),'missing TikTok UI marker: '+marker);
 for(const marker of ["PLAYER_ORIGIN+'/player/v1/'","function parseVideoUrl(value)","event.origin!==PLAYER_ORIGIN","event.source!==frame.contentWindow","window.NM7PlayerBridge.openTikTok","localStorage","tiktokSwipeNext","function handleRemoteKey(e)"])assert.ok(tiktok.includes(marker),'missing TikTok behavior marker: '+marker);
 for(const [name,path] of [['mobile','web-tv/app-safari-policy-mobile-controls.js'],['pc','web-tv/app-safari-policy-pc-controls.js'],['app','web-tv/app.js'],['legacy','web-tv/app-safari-policy.js']]){
  const source=read(path);
