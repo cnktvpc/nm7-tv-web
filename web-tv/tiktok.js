@@ -12,6 +12,7 @@ function setMobileNotice(title,copy,docs){
  if(heading)heading.textContent=title||'TikTok';
  if(body)body.textContent=copy||'';
  if(docsButton)docsButton.style.display=docs===false?'none':'';
+ var logoutButton=byId('tiktokMobileLogout');if(logoutButton)logoutButton.style.display=state.authenticated?'':'none';
  if(wrap)wrap.classList.remove('hidden');
 }
 function closeMobileNotice(){var wrap=byId('tiktokMobileNotice');if(wrap)wrap.classList.add('hidden')}
