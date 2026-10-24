@@ -1,0 +1,131 @@
+name: NM7 TikTok isolated preview
+
+on:
+  push:
+    branches:
+      - feat/tiktok-tab-preview-20261024
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "web-tv/**"
+      - "worker.js"
+      - "scripts/test-tiktok-tab.js"
+      - "scripts/test-tiktok-tab-e2e.mjs"
+      - "wrangler.tiktok-preview.toml"
+      - ".github/workflows/tiktok-preview.yml"
+  workflow_dispatch:
+
+# Each run validates the exact commit independently. Older Chromium E2E
+# jobs can stall on hosted-runner setup; don't leave the latest preview pending
+# behind an older run. Preview deployments in this branch use the same isolated
+# Worker and no production environment.
+concurrency:
+  group: nm7-tiktok-preview-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Syntax and TikTok / existing UI regressions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check web-tv/tiktok.js
+          node --check web-tv/app.js
+          node --check web-tv/app-safari-policy.js
+          node --check web-tv/app-safari-policy-mobile-controls.js
+          node --check web-tv/app-safari-policy-pc-controls.js
+          node --check worker.js
+      - name: TikTok integration regression
+        run: node scripts/test-tiktok-tab.js
+      - name: Existing UI regressions
+        run: |
+          set -euo pipefail
+          node scripts/test-desktop-home-tabs.js
+          node scripts/test-ipad-landscape-menu.js
+          node scripts/test-menu-fullscreen.js
+          node scripts/test-live-feed.js
+
+  deploy-preview:
+    name: Deploy isolated TikTok preview Worker
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/tiktok-tab-preview-20261024'
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Deploy preview Worker only
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.tiktok-preview.toml
+      - name: Smoke test isolated preview HTML and TikTok asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev"
+          ready=0
+          for attempt in 1 2 3 4 5 6; do
+            code="$(curl -sS --max-time 30 -o /tmp/nm7-tiktok-preview.html -w '%{http_code}' "$BASE/?__tiktok_smoke=$(date +%s)-$attempt")"
+            if [ "$code" = "200" ] && python3 - <<'PY'
+          from pathlib import Path
+          html=Path('/tmp/nm7-tiktok-preview.html').read_text(encoding='utf-8')
+          required=('id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','tiktok.js?v=20261024-tiktok-official-v1')
+          missing=[item for item in required if item not in html]
+          if missing: raise SystemExit('TIKTOK_PREVIEW_HTML_FAIL: '+repr(missing))
+          print('TIKTOK_PREVIEW_HTML_OK: tab/view/player/controller script found')
+          PY
+            then ready=1; break; fi
+            echo "TIKTOK_PREVIEW_WAITING_FOR_EDGE attempt=$attempt status=$code"
+            sleep 3
+          done
+          test "$ready" = "1"
+          curl -fsSL --max-time 30 "$BASE/tiktok.js?v=20261024-tiktok-official-v1&smoke=$(date +%s)" -o /tmp/nm7-tiktok-preview.js
+          grep -q "PLAYER_ORIGIN+'/player/v1/'" /tmp/nm7-tiktok-preview.js
+          grep -q 'function handleRemoteKey(e)' /tmp/nm7-tiktok-preview.js
+          echo "TIKTOK_PREVIEW_ASSET_OK"
+          curl -fsSL --retry 2 --max-time 30 "$BASE/api/playlist?source=tv&default=2&__tiktok_smoke=$(date +%s)" -o /tmp/nm7-tiktok-playlist.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('/tmp/nm7-tiktok-playlist.json').read_text(encoding='utf-8'))
+          channels=data.get('channels')
+          if not isinstance(channels,list): raise SystemExit('TIKTOK_PREVIEW_IPTV_API_SHAPE_CHANGED')
+          print('TIKTOK_PREVIEW_IPTV_API_OK channels='+str(len(channels)))
+          PY
+          echo "NM7_TIKTOK_ISOLATED_PREVIEW_SMOKE_OK"
+          curl -fsSL --max-time 20 "$BASE/api/tiktok/config?__smoke=$(date +%s)" -o /tmp/nm7-tiktok-config.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          config=json.loads(Path('/tmp/nm7-tiktok-config.json').read_text(encoding='utf-8'))
+          if not isinstance(config.get('configured'), bool): raise SystemExit('TIKTOK_CONFIG_STATUS_MISSING')
+          if not isinstance(config.get('missing'), list): raise SystemExit('TIKTOK_CONFIG_MISSING_LIST')
+          print('TIKTOK_OAUTH_CONFIG_ROUTE_OK configured='+str(config['configured'])+' missing='+str(len(config['missing'])))
+          PY
+
+      - name: Install Chromium for TikTok browser E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.1
+          npx playwright install --with-deps chromium
+
+      - name: Exercise TikTok UI and remote controls in Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-tiktok-tab-e2e.mjs

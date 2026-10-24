@@ -1,3 +1,15 @@
+## TikTok mobile — mở giao diện chính thức (24/10/2026; isolated preview)
+
+- **Mobile behaviour:** tapping the NM7 TikTok tab navigates the same browser tab to TikTok's official For You URL: https://www.tiktok.com/foryou?lang=vi-VN. Android/iOS may hand off to the installed TikTok app depending on OS/browser app-link settings; otherwise the official TikTok mobile website loads. Browser Back returns to NM7.
+- This intentionally stops rendering the hand-built mobile feed UI. To use TikTok's own swipe feed, login, follow, like, comment, recommendations and native controls, the content must run on TikTok's own app/website origin. NM7 must not intercept those gestures with a transparent overlay.
+- TikTok's official Embed Player supports embedding an individual post by ID and documented player messages; Display API provides authorized profile/recent-video data. TikTok does not provide an official embeddable full For You application interface. References: https://developers.tiktok.com/docs/en/embed-player, https://developers.tiktok.com/docs/en/display-api-overview, https://developers.tiktok.com/docs/en/display-api-get-started.
+- Desktop/tablet pointer mode retains the NM7 embedded-post list and controls. Mobile mode hands off to the official TikTok website/app link instead of trying to imitate or iframe the first-party feed.
+- The previous mobile imitation feed and pointer overlay failed to provide native scrolling and account interactions. The E2E suite now explicitly verifies that the mobile tab navigates to TikTok's first-party URL and that browser Back returns to NM7; it does not claim to simulate TikTok's internal feed.
+- Preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. Feature branch: feat/tiktok-tab-preview-20261024. Draft PR: https://github.com/cnktvpc/nm7-tv-web/pull/34. Production remains unchanged.
+- Official mobile handoff E2E and isolated preview deploy/smoke passed on commit `db776a4d`: https://github.com/cnktvpc/nm7-tv-web/actions/runs/40054850634. Desktop embedded-player checks and browser Back to NM7 passed. Smoke test confirms IPTV API responds with 324 channels.
+
+
+
 ## Cập nhật tiếp tục điều tra TV360+15 — 22/10/2026 (trạng thái chưa phát hành)
 
 - Nhánh tiếp tục sử dụng: `fix/tv360-probe-http-recovery-20261022`; PR [#24](https://github.com/cnktvpc/nm7-tv-web/pull/24) vẫn mở. Các commit trong đợt sửa tiếp theo: [9296fc4](https://github.com/cnktvpc/nm7-tv-web/commit/9296fc49094b0fa0f00494c70a98f1dec27a9b0e), [ff09b4d](https://github.com/cnktvpc/nm7-tv-web/commit/ff09b4d555ecf2dc14675c6c637462bb933aefe7), [fd2ce2f](https://github.com/cnktvpc/nm7-tv-web/commit/fd2ce2f8a0cc372b59739da7a6c1e721ab96e2b2). Các thay đổi sửa escape newline ở những runtime đang dùng và đồng bộ assertion cache-buster.
