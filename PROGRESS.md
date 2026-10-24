@@ -1,14 +1,11 @@
-## 2026-10-24 — TikTok mobile feed + Login Kit/Display API (isolated preview; not production)
+## 2026-10-24 — TikTok mobile switches to official first-party interface (isolated preview)
 
-- Reworked the mobile UI from a small embed with a toolbar and buttons below it into a fixed full-viewport vertical feed shell, with mode tabs, bottom navigation, right-side actions, playback/mute/fullscreen controls and a compact add-link sheet.
-- Added an NM7-owned gesture layer over the cross-origin iframe. Vertical swipe up/down changes posts; a short tap toggles playback. The layer intercepts touch input, so native TikTok actions that need TikTok account state open the original post. Saved URLs are stored locally.
-- Added “Đề xuất” from locally added/saved public post URLs and a “Tài khoản” mode backed by TikTok's official Display API for an authorized user's own recent public videos. This is not a cloned For You recommendation API; TikTok's public Display API is limited to a user's account/profile/video data.
-- Added Worker OAuth/session routes for TikTok Login Kit and Display API. OAuth state cookie is validated, token exchange stays server-side, and session tokens are AES-GCM encrypted in a Secure/HttpOnly/SameSite cookie. Added explicit logout route.
-- Required but not supplied by repository tools: Worker secrets TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_SESSION_SECRET, and an exact registered TIKTOK_REDIRECT_URI. Until those are configured in the preview Worker and the TikTok app has Login Kit + Display API approval/scopes user.info.basic,video.list, login UI correctly displays a setup prompt and account mode cannot retrieve live data.
-- Added static integration assertions for mobile controls/auth routes and expanded Chromium E2E to cover desktop, mobile full-screen dimensions, add-video sheet, swipe up/down, OAuth setup prompt, Back navigation and iframe cleanup. Latest CI/deploy/smoke/mobile E2E is **PASS** on commit `b6745cf5`: https://github.com/cnktvpc/nm7-tv-web/actions/runs/40053647743. The final PR E2E on the same commit also passed: https://github.com/cnktvpc/nm7-tv-web/actions/runs/40053650448.
-- E2E caught a missing `bindSwipeRail` function in the initial mobile rewrite, which stopped JavaScript initialization before loading the saved video list. Restored the helper, added test coverage, bumped the script cache version to `20261024-tiktok-mobile-v3`, redeployed, and verified the full flow passes.
-- OAuth status from preview `/api/tiktok/config`: `configured=false`, three secrets missing. The sign-in button shows a setup notice rather than pretending to authenticate; live login requires TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_SESSION_SECRET, a registered HTTPS TIKTOK_REDIRECT_URI, and TikTok Login Kit/Display API app approval.
-- Preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. Draft PR #34: https://github.com/cnktvpc/nm7-tv-web/pull/34. No production Worker, playlist URL, DRM code, Android app or Mobile repo has been modified by this change.
+- User testing showed the custom TikTok-like shell still did not behave like TikTok's native mobile feed. Replaced mobile entry with same-tab navigation to `https://www.tiktok.com/foryou?lang=vi-VN`; this loads the official TikTok mobile website and may open the installed app through OS app-link handling. Browser Back returns to the prior NM7 page.
+- This is a deliberate technical correction: TikTok officially offers an individual-post Embed Player and Display API for authorized profile/recent-video metadata, not a full embeddable For You app surface. An iframe cannot grant NM7 control of TikTok's cross-origin native feed or its gestures.
+- Desktop pointer mode keeps the existing individual-post embed. Mobile no longer displays the imitation feed/gesture overlay and does not intercept swipes intended for TikTok.
+- Browser E2E was rewritten to verify mobile navigation to the first-party TikTok URL and browser Back to NM7, while retaining the desktop embedded-player regression tests. Latest commit pending: CI must pass after this update.
+- Preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. PR #34 remains draft; production is untouched.
+
 
 
 ## 2026-10-22 — Tiếp tục sửa TV360+15
