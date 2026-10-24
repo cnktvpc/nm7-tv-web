@@ -1,3 +1,13 @@
+## 2026-10-24 — TikTok tab implementation (isolated preview; not production)
+
+- Created feature branch `feat/tiktok-tab-preview-20261024` from the latest accessible `main` HEAD, `7360d4226942cd62bc5329460decec253f5604ae`. The documented `stable/nm7-tv-web-2026-10-09` branch was not present in this connected repository, so the production/stable branch was not modified.
+- Added a separate TikTok tab and view, a locally persisted user-managed video list, add/remove/select controls, the official TikTok Embed Player URL format, origin/source checks for player messages, TV remote Back/Up/Down/Left/Right handling, and touch swipe rails outside the cross-origin iframe.
+- Added lifecycle hooks to close the NM7 IPTV player and leave the Live section before entering TikTok. Leaving TikTok blanks the iframe so TikTok playback cannot continue in the background. No playlist URL, DRM behavior, production Worker config, or Android/Mobile repository was changed.
+- Added `scripts/test-tiktok-tab.js` covering official URL parsing/rejections and integration markers. Added `.github/workflows/tiktok-preview.yml` and `wrangler.tiktok-preview.toml` for an isolated Worker named `nm7-tv-web-tiktok-preview`.
+- The default video is only the public example in TikTok's official Embed Player docs, used as a smoke-test seed. Users can paste complete public TikTok video URLs; short links without a visible video ID are rejected with guidance. This implementation does not scrape TikTok, implement an algorithmic For You feed, or use Display API OAuth.
+- CI/deployment/manual-device verification: pending. Candidate preview URL, if the isolated Worker deploy job succeeds: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. Do not merge or call this production until CI, preview smoke and device checks pass.
+- Official references: https://developers.tiktok.com/docs/en/embed-player and https://developers.tiktok.com/docs/en/display-api-overview.
+
 ## 2026-10-22 — Tiếp tục sửa TV360+15
 
 - Đã sửa dòng newline escape còn sót trong runtime legacy `web-tv/app-safari-policy.js` theo assertion startup regression: [commit 5b6ec21](https://github.com/cnktvpc/nm7-tv-web/commit/5b6ec21af380cffec36f5877dae943d516b5fded).
