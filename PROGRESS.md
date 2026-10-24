@@ -1,13 +1,13 @@
-## 2026-10-24 — TikTok tab implementation (isolated preview; not production)
+## 2026-10-24 — TikTok mobile feed + Login Kit/Display API (isolated preview; not production)
 
-- Created feature branch `feat/tiktok-tab-preview-20261024` from the latest accessible `main` HEAD, `7360d4226942cd62bc5329460decec253f5604ae`. The documented `stable/nm7-tv-web-2026-10-09` branch was not present in this connected repository, so the production/stable branch was not modified.
-- Added a separate TikTok tab and view, a locally persisted user-managed video list, add/remove/select controls, the official TikTok Embed Player URL format, origin/source checks for player messages, TV remote Back/Up/Down/Left/Right handling, and touch swipe rails outside the cross-origin iframe.
-- Added lifecycle hooks to close the NM7 IPTV player and leave the Live section before entering TikTok. Leaving TikTok blanks the iframe so TikTok playback cannot continue in the background. No playlist URL, DRM behavior, production Worker config, or Android/Mobile repository was changed.
-- Added `scripts/test-tiktok-tab.js` covering official URL parsing/rejections and integration markers. Added `.github/workflows/tiktok-preview.yml` and `wrangler.tiktok-preview.toml` for an isolated Worker named `nm7-tv-web-tiktok-preview`.
-- The default video is only the public example in TikTok's official Embed Player docs, used as a smoke-test seed. Users can paste complete public TikTok video URLs; short links without a visible video ID are rejected with guidance. This implementation does not scrape TikTok, implement an algorithmic For You feed, or use Display API OAuth.
-- CI/deploy/browser E2E: **PASS** on https://github.com/cnktvpc/nm7-tv-web/actions/runs/40051403732. Smoke checks confirmed the TikTok tab, controller asset and unchanged playlist API (325 channels); Chromium checked tab entry, official Embed Player URL, add/switch video, remote Up, Back and iframe cleanup. Isolated preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/.
-- Draft PR #34 is open at https://github.com/cnktvpc/nm7-tv-web/pull/34. It is not merged or deployed to production. Manual Samsung TV browser and real phone/tablet checks remain pending; do not promote until those checks pass.
-- Official references: https://developers.tiktok.com/docs/en/embed-player and https://developers.tiktok.com/docs/en/display-api-overview.
+- Reworked the mobile UI from a small embed with a toolbar and buttons below it into a fixed full-viewport vertical feed shell, with mode tabs, bottom navigation, right-side actions, playback/mute/fullscreen controls and a compact add-link sheet.
+- Added an NM7-owned gesture layer over the cross-origin iframe. Vertical swipe up/down changes posts; a short tap toggles playback. The layer intercepts touch input, so native TikTok actions that need TikTok account state open the original post. Saved URLs are stored locally.
+- Added “Đề xuất” from locally added/saved public post URLs and a “Tài khoản” mode backed by TikTok's official Display API for an authorized user's own recent public videos. This is not a cloned For You recommendation API; TikTok's public Display API is limited to a user's account/profile/video data.
+- Added Worker OAuth/session routes for TikTok Login Kit and Display API. OAuth state cookie is validated, token exchange stays server-side, and session tokens are AES-GCM encrypted in a Secure/HttpOnly/SameSite cookie. Added explicit logout route.
+- Required but not supplied by repository tools: Worker secrets TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, TIKTOK_SESSION_SECRET, and an exact registered TIKTOK_REDIRECT_URI. Until those are configured in the preview Worker and the TikTok app has Login Kit + Display API approval/scopes user.info.basic,video.list, login UI correctly displays a setup prompt and account mode cannot retrieve live data.
+- Added static integration assertions for mobile controls/auth routes and expanded Chromium E2E to cover desktop, mobile full-screen dimensions, add-video sheet, swipe up/down, OAuth setup prompt, Back navigation and iframe cleanup. The current branch's new workflow run must pass before handing off this redesign.
+- Preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. Draft PR #34: https://github.com/cnktvpc/nm7-tv-web/pull/34. No production Worker, playlist URL, DRM code, Android app or Mobile repo has been modified by this change.
+
 
 ## 2026-10-22 — Tiếp tục sửa TV360+15
 
