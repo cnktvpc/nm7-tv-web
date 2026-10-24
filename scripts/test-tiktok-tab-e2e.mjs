@@ -23,10 +23,25 @@ try {
   await desktop.locator('#homeRows .card').first().waitFor({ state: 'attached', timeout: 30000 });
   await desktop.locator('#btnTikTokTab').click();
   await desktop.locator('#tiktokView:not(.hidden)').waitFor({ state: 'visible', timeout: 10000 });
-  await desktop.waitForFunction(() =>
-    document.querySelector('#tiktokFrame')?.src.includes('/player/v1/6718335390845095173'),
-    null, { timeout: 15000 }
-  );
+  try {
+    await desktop.waitForFunction(() =>
+      document.querySelector('#tiktokFrame')?.src.includes('/player/v1/6718335390845095173'),
+      null, { timeout: 15000 }
+    );
+  } catch (error) {
+    const diagnostic = await desktop.evaluate(() => ({
+      url: location.href,
+      active: window.NM7TikTok?.isActive?.(),
+      frameSrc: document.querySelector('#tiktokFrame')?.src,
+      tiktokScript: !!window.NM7TikTok,
+      status: document.querySelector('#tiktokStatus')?.textContent,
+      homeRows: document.querySelector('#homeRows')?.className,
+      viewClass: document.querySelector('#tiktokView')?.className,
+      scripts: Array.from(document.scripts).map(s => s.src).filter(x => x.includes('tiktok'))
+    }));
+    console.log('TIKTOK_DESKTOP_DIAGNOSTIC=' + JSON.stringify({diagnostic,pageErrors:desktopErrors}));
+    throw error;
+  }
   await desktop.locator('#tiktokUrl').fill('https://www.tiktok.com/@nm7_test/video/1234567890123456789');
   await desktop.locator('#tiktokAddBtn').click();
   await desktop.waitForFunction(() =>
