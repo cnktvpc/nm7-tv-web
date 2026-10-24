@@ -6,6 +6,7 @@
 - Desktop/tablet pointer mode retains the NM7 embedded-post list and controls. Mobile mode hands off to the official TikTok website/app link instead of trying to imitate or iframe the first-party feed.
 - The previous mobile imitation feed and pointer overlay failed to provide native scrolling and account interactions. The E2E suite now explicitly verifies that the mobile tab navigates to TikTok's first-party URL and that browser Back returns to NM7; it does not claim to simulate TikTok's internal feed.
 - Preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. Feature branch: feat/tiktok-tab-preview-20261024. Draft PR: https://github.com/cnktvpc/nm7-tv-web/pull/34. Production remains unchanged.
+- Official mobile handoff E2E and isolated preview deploy/smoke passed on commit `db776a4d`: https://github.com/cnktvpc/nm7-tv-web/actions/runs/40054850634. Desktop embedded-player checks and browser Back to NM7 passed. Smoke test confirms IPTV API responds with 324 channels.
 
 
 
