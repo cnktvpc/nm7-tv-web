@@ -78,7 +78,7 @@ jobs:
             if [ "$code" = "200" ] && python3 - <<'PY'
           from pathlib import Path
           html=Path('/tmp/nm7-tiktok-preview.html').read_text(encoding='utf-8')
-          required=('id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','tiktok.js?v=20261024-tiktok-mobile-v3')
+          required=('id="btnTikTokTab"','id="tiktokView"','id="tiktokFrame"','tiktok.js?v=20261024-tiktok-official-v1')
           missing=[item for item in required if item not in html]
           if missing: raise SystemExit('TIKTOK_PREVIEW_HTML_FAIL: '+repr(missing))
           print('TIKTOK_PREVIEW_HTML_OK: tab/view/player/controller script found')
@@ -88,7 +88,7 @@ jobs:
             sleep 3
           done
           test "$ready" = "1"
-          curl -fsSL --max-time 30 "$BASE/tiktok.js?v=20261024-tiktok-mobile-v3&smoke=$(date +%s)" -o /tmp/nm7-tiktok-preview.js
+          curl -fsSL --max-time 30 "$BASE/tiktok.js?v=20261024-tiktok-official-v1&smoke=$(date +%s)" -o /tmp/nm7-tiktok-preview.js
           grep -q "PLAYER_ORIGIN+'/player/v1/'" /tmp/nm7-tiktok-preview.js
           grep -q 'function handleRemoteKey(e)' /tmp/nm7-tiktok-preview.js
           echo "TIKTOK_PREVIEW_ASSET_OK"
