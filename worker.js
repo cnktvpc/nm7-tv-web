@@ -1714,4 +1714,155 @@ try{bindLogoActivationEvents();activateLogos()}catch(e){}
  return new Response(fixed,{status:response.status,statusText:response.statusText,headers:noCacheResponseHeaders(response.headers)});
 }
 
-export default {async fetch(request,env){const url=new URL(request.url),p=url.pathname,q=url.searchParams;if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(new Headers())});try{if(p==='/api/live-feed')return liveFeedResponse(request,env);if(p==='/api/news/play')return newsPlayResponse(url);if(p==='/api/news')return newsResponse(url);if(p==='/api/playlist')return playlistResponse(q.get('source')||'tv',q.get('default')||'',env,q.get('refresh')==='1');if(p.startsWith('/api/dash-resource/'))return dashResourceResponse(request,url);if(p==='/api/source')return sourceResponse(q,env);if(p==='/api/stream')return streamResponse(request,q);if(p==='/api/image')return imageResponse(q);if(p==='/api/license')return licenseResponse(request,q);if(p==='/api/probe')return probeResponse(request,q);if(p==='/'||p==='/tv'){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));const h=new Headers(page.headers);h.set('Cache-Control','no-store, no-cache, must-revalidate');h.set('Pragma','no-cache');h.set('Expires','0');return liveOverlayHtmlResponse(new Response(page.body,{status:page.status,statusText:page.statusText,headers:h}));}if((p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js')&&request.method==='GET')return liveOverlayScriptResponse(await env.ASSETS.fetch(request));if(p.startsWith('/web-tv/')){const assetPath=p.replace(/^\/web-tv\//,'/');const assetRequest=new Request(new URL(assetPath,request.url),request);const asset=await env.ASSETS.fetch(assetRequest);if(request.method==='GET'&&assetPath==='/index.html')return liveOverlayHtmlResponse(asset);if(request.method==='GET'&&(assetPath==='/app-safari-policy-mobile-controls.js'||assetPath==='/app-safari-policy-pc-controls.js'))return liveOverlayScriptResponse(asset);return asset;}return env.ASSETS.fetch(request)}catch(e){return new Response(JSON.stringify({error:'worker error',message:String(e?.message||e)}),{status:502,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}})}}};
+
+const TIKTOK_SESSION_COOKIE='nm7_tiktok_session';
+const TIKTOK_STATE_COOKIE='nm7_tiktok_oauth_state';
+function tiktokJson(data,status=200,extraHeaders={}){
+ const h=new Headers(extraHeaders);h.set('Content-Type','application/json; charset=utf-8');h.set('Cache-Control','no-store');h.set('X-Content-Type-Options','nosniff');return new Response(JSON.stringify(data),{status,headers:h});
+}
+function tiktokCookie(request,name){
+ const all=request.headers.get('Cookie')||'';
+ for(const part of all.split(';')){const i=part.indexOf('=');if(i<0)continue;if(part.slice(0,i).trim()===name)return part.slice(i+1).trim()}
+ return '';
+}
+function tiktokSetCookie(name,value,maxAge,path='/'){
+ return name+'='+value+'; Path='+path+'; Max-Age='+String(maxAge)+'; Secure; HttpOnly; SameSite=Lax';
+}
+function tiktokBase64(bytes){
+ let binary='';for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+ return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function tiktokUnbase64(text){
+ let raw=String(text||'').replace(/-/g,'+').replace(/_/g,'/');
+ raw+='='.repeat((4-raw.length%4)%4);const binary=atob(raw),out=new Uint8Array(binary.length);
+ for(let i=0;i<binary.length;i++)out[i]=binary.charCodeAt(i);return out;
+}
+function tiktokConfig(env,url){
+ const missing=[];
+ if(!String(env.TIKTOK_CLIENT_KEY||'').trim())missing.push('TIKTOK_CLIENT_KEY');
+ if(!String(env.TIKTOK_CLIENT_SECRET||'').trim())missing.push('TIKTOK_CLIENT_SECRET');
+ if(!String(env.TIKTOK_SESSION_SECRET||'').trim())missing.push('TIKTOK_SESSION_SECRET');
+ const redirectUri=String(env.TIKTOK_REDIRECT_URI||new URL('/api/tiktok/oauth/callback',url.origin).toString()).trim();
+ if(!/^https:\/\//i.test(redirectUri))missing.push('TIKTOK_REDIRECT_URI (HTTPS)');
+ return {configured:missing.length===0,missing,redirectUri};
+}
+async function tiktokSessionKey(env){
+ const secret=String(env.TIKTOK_SESSION_SECRET||'');if(!secret)return null;
+ const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('NM7-TikTok-session-v1:'+secret));
+ return crypto.subtle.importKey('raw',digest,{name:'AES-GCM'},false,['encrypt','decrypt']);
+}
+async function tiktokSealSession(session,env){
+ const key=await tiktokSessionKey(env);if(!key)throw new Error('TIKTOK_SESSION_SECRET is not configured');
+ const iv=crypto.getRandomValues(new Uint8Array(12));
+ const clear=new TextEncoder().encode(JSON.stringify(session));
+ const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,clear);
+ return tiktokBase64(iv)+'.'+tiktokBase64(new Uint8Array(encrypted));
+}
+async function tiktokOpenSession(request,env){
+ const value=tiktokCookie(request,TIKTOK_SESSION_COOKIE);if(!value)return null;
+ try{
+  const parts=value.split('.');if(parts.length!==2)return null;
+  const key=await tiktokSessionKey(env);if(!key)return null;
+  const clear=await crypto.subtle.decrypt({name:'AES-GCM',iv:tiktokUnbase64(parts[0])},key,tiktokUnbase64(parts[1]));
+  const session=JSON.parse(new TextDecoder().decode(clear));
+  return session&&typeof session.access_token==='string'?session:null;
+ }catch{return null}
+}
+async function tiktokTokenPost(fields,env){
+ const body=new URLSearchParams({...fields,client_key:String(env.TIKTOK_CLIENT_KEY||''),client_secret:String(env.TIKTOK_CLIENT_SECRET||'')});
+ const response=await fetchWithTimeout('https://open.tiktokapis.com/v2/oauth/token/',{
+  method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:body.toString()
+ },15000);
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok||payload.error||payload.data?.error)throw new Error('TikTok token exchange failed: '+String(payload.error_description||payload.error||response.status));
+ return payload.data||payload;
+}
+async function tiktokRefreshSession(session,env){
+ if(!session||!session.refresh_token||!String(env.TIKTOK_CLIENT_KEY||'')||!String(env.TIKTOK_CLIENT_SECRET||''))return null;
+ const data=await tiktokTokenPost({grant_type:'refresh_token',refresh_token:session.refresh_token},env);
+ const now=Date.now();
+ return {...session,access_token:data.access_token||session.access_token,refresh_token:data.refresh_token||session.refresh_token,
+  access_expires_at:now+Number(data.expires_in||86400)*1000,
+  refresh_expires_at:now+Number(data.refresh_expires_in||31536000)*1000,
+  scope:String(data.scope||session.scope||'')};
+}
+async function tiktokAccessForRequest(request,env){
+ let session=await tiktokOpenSession(request,env);if(!session)return {session:null,accessToken:'',setCookie:''};
+ let setCookie='';
+ if(Number(session.access_expires_at||0)<Date.now()+60000){
+  try{
+   const updated=await tiktokRefreshSession(session,env);
+   if(updated){session=updated;setCookie=tiktokSetCookie(TIKTOK_SESSION_COOKIE,await tiktokSealSession(session,env),2592000,'/')}
+   else return {session:null,accessToken:'',setCookie:''};
+  }catch{return {session:null,accessToken:'',setCookie:''}}
+ }
+ return {session,accessToken:session.access_token,setCookie};
+}
+function tiktokAuthErrorRedirect(url,reason){
+ const target=new URL('/',url.origin);target.searchParams.set('tiktok_auth','error');target.searchParams.set('reason',reason);
+ return target.toString();
+}
+async function tiktokOAuthStart(request,env,url){
+ const config=tiktokConfig(env,url);if(!config.configured)return tiktokJson({error:'tiktok_login_not_configured',configured:false,missing:config.missing,redirect_uri:config.redirectUri},503);
+ const state=tiktokBase64(crypto.getRandomValues(new Uint8Array(32)));
+ const authorize=new URL('https://www.tiktok.com/v2/auth/authorize/');
+ authorize.searchParams.set('client_key',String(env.TIKTOK_CLIENT_KEY));
+ authorize.searchParams.set('response_type','code');
+ authorize.searchParams.set('scope','user.info.basic,video.list');
+ authorize.searchParams.set('redirect_uri',config.redirectUri);
+ authorize.searchParams.set('state',state);
+ const headers=new Headers({Location:authorize.toString(),'Cache-Control':'no-store'});
+ headers.append('Set-Cookie',tiktokSetCookie(TIKTOK_STATE_COOKIE,state,600,'/api/tiktok/oauth/callback'));
+ return new Response(null,{status:302,headers});
+}
+async function tiktokOAuthCallback(request,env,url){
+ const config=tiktokConfig(env,url),q=url.searchParams;
+ const stateFromCookie=tiktokCookie(request,TIKTOK_STATE_COOKIE),stateFromQuery=q.get('state')||'';
+ const headers=new Headers({'Cache-Control':'no-store','Location':tiktokAuthErrorRedirect(url,'auth')});
+ headers.append('Set-Cookie',tiktokSetCookie(TIKTOK_STATE_COOKIE,'',0,'/api/tiktok/oauth/callback'));
+ if(!config.configured||!stateFromCookie||!stateFromQuery||stateFromCookie!==stateFromQuery||q.get('error')||!q.get('code'))return new Response(null,{status:302,headers});
+ try{
+  const data=await tiktokTokenPost({grant_type:'authorization_code',code:q.get('code'),redirect_uri:config.redirectUri},env);
+  if(!data.access_token)throw new Error('TikTok did not return an access token');
+  const now=Date.now();
+  const session={access_token:data.access_token,refresh_token:data.refresh_token||'',scope:String(data.scope||''),
+   open_id:String(data.open_id||''),access_expires_at:now+Number(data.expires_in||86400)*1000,
+   refresh_expires_at:now+Number(data.refresh_expires_in||31536000)*1000};
+  headers.set('Location',new URL('/?tiktok_auth=success',url.origin).toString());
+  headers.append('Set-Cookie',tiktokSetCookie(TIKTOK_SESSION_COOKIE,await tiktokSealSession(session,env),2592000,'/'));
+  return new Response(null,{status:302,headers});
+ }catch{
+  headers.set('Location',tiktokAuthErrorRedirect(url,'token'));
+  return new Response(null,{status:302,headers});
+ }
+}
+async function tiktokSessionResponse(request,env,url){
+ const config=tiktokConfig(env,url),auth=await tiktokAccessForRequest(request,env);
+ if(!config.configured)return tiktokJson({configured:false,authenticated:false,missing:config.missing,redirect_uri:config.redirectUri},200);
+ if(!auth.accessToken)return tiktokJson({configured:true,authenticated:false,redirect_uri:config.redirectUri});
+ try{
+  const response=await fetchWithTimeout('https://open.tiktokapis.com/v2/user/info/?fields=open_id,avatar_url,display_name,profile_deep_link',{
+   headers:{Authorization:'Bearer '+auth.accessToken,Accept:'application/json'}
+  },12000);
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok||payload.error&&payload.error.code!=='ok')return tiktokJson({configured:true,authenticated:false,error:'profile_request_failed',message:String(payload.error?.message||response.status)},401,auth.setCookie?{'Set-Cookie':auth.setCookie}:{});
+  const headers=auth.setCookie?{'Set-Cookie':auth.setCookie}:{};
+  return tiktokJson({configured:true,authenticated:true,profile:payload.data?.user||null,scope:auth.session.scope||''},200,headers);
+ }catch{return tiktokJson({configured:true,authenticated:false,error:'tiktok_api_unavailable'},502)}
+}
+async function tiktokVideosResponse(request,env,url){
+ const auth=await tiktokAccessForRequest(request,env);
+ if(!auth.accessToken)return tiktokJson({error:'not_authenticated',message:'Đăng nhập TikTok để tải các video của tài khoản.'},401);
+ try{
+  const apiUrl='https://open.tiktokapis.com/v2/video/list/?fields=id,title,video_description,duration,cover_image_url,share_url,embed_link';
+  const response=await fetchWithTimeout(apiUrl,{method:'POST',headers:{Authorization:'Bearer '+auth.accessToken,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({max_count:20})},15000);
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok||payload.error&&payload.error.code!=='ok')return tiktokJson({error:'video_list_failed',message:String(payload.error?.message||response.status)},response.status>=400?response.status:502,auth.setCookie?{'Set-Cookie':auth.setCookie}:{});
+  return tiktokJson({videos:payload.data?.videos||[],cursor:payload.data?.cursor||0,has_more:!!payload.data?.has_more},200,auth.setCookie?{'Set-Cookie':auth.setCookie}:{});
+ }catch{return tiktokJson({error:'tiktok_api_unavailable',message:'Không kết nối được TikTok Display API.'},502)}
+}
+async function tiktokLogout(){
+ return tiktokJson({ok:true},{},{'Set-Cookie':tiktokSetCookie(TIKTOK_SESSION_COOKIE,'',0,'/')});
+}
+
+export default {async fetch(request,env){const url=new URL(request.url),p=url.pathname,q=url.searchParams;if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors(new Headers())});try{if(p==='/api/tiktok/config'&&request.method==='GET'){const c=tiktokConfig(env,url);return tiktokJson({configured:c.configured,missing:c.missing,redirect_uri:c.redirectUri})}if(p==='/api/tiktok/oauth/start'&&request.method==='GET')return tiktokOAuthStart(request,env,url);if(p==='/api/tiktok/oauth/callback'&&request.method==='GET')return tiktokOAuthCallback(request,env,url);if(p==='/api/tiktok/session'&&request.method==='GET')return tiktokSessionResponse(request,env,url);if(p==='/api/tiktok/videos'&&request.method==='GET')return tiktokVideosResponse(request,env,url);if(p==='/api/tiktok/logout'&&request.method==='POST')return tiktokLogout();if(p==='/api/live-feed')return liveFeedResponse(request,env);if(p==='/api/news/play')return newsPlayResponse(url);if(p==='/api/news')return newsResponse(url);if(p==='/api/playlist')return playlistResponse(q.get('source')||'tv',q.get('default')||'',env,q.get('refresh')==='1');if(p.startsWith('/api/dash-resource/'))return dashResourceResponse(request,url);if(p==='/api/source')return sourceResponse(q,env);if(p==='/api/stream')return streamResponse(request,q);if(p==='/api/image')return imageResponse(q);if(p==='/api/license')return licenseResponse(request,q);if(p==='/api/probe')return probeResponse(request,q);if(p==='/'||p==='/tv'){const page=await env.ASSETS.fetch(new Request(new URL('/index.html',request.url),request));const h=new Headers(page.headers);h.set('Cache-Control','no-store, no-cache, must-revalidate');h.set('Pragma','no-cache');h.set('Expires','0');return liveOverlayHtmlResponse(new Response(page.body,{status:page.status,statusText:page.statusText,headers:h}));}if((p==='/app-safari-policy-mobile-controls.js'||p==='/app-safari-policy-pc-controls.js')&&request.method==='GET')return liveOverlayScriptResponse(await env.ASSETS.fetch(request));if(p.startsWith('/web-tv/')){const assetPath=p.replace(/^\/web-tv\//,'/');const assetRequest=new Request(new URL(assetPath,request.url),request);const asset=await env.ASSETS.fetch(assetRequest);if(request.method==='GET'&&assetPath==='/index.html')return liveOverlayHtmlResponse(asset);if(request.method==='GET'&&(assetPath==='/app-safari-policy-mobile-controls.js'||assetPath==='/app-safari-policy-pc-controls.js'))return liveOverlayScriptResponse(asset);return asset;}return env.ASSETS.fetch(request)}catch(e){return new Response(JSON.stringify({error:'worker error',message:String(e?.message||e)}),{status:502,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'}})}}};
