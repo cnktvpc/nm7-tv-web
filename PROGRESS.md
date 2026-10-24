@@ -3,7 +3,8 @@
 - User testing showed the custom TikTok-like shell still did not behave like TikTok's native mobile feed. Replaced mobile entry with same-tab navigation to `https://www.tiktok.com/foryou?lang=vi-VN`; this loads the official TikTok mobile website and may open the installed app through OS app-link handling. Browser Back returns to the prior NM7 page.
 - This is a deliberate technical correction: TikTok officially offers an individual-post Embed Player and Display API for authorized profile/recent-video metadata, not a full embeddable For You app surface. An iframe cannot grant NM7 control of TikTok's cross-origin native feed or its gestures.
 - Desktop pointer mode keeps the existing individual-post embed. Mobile no longer displays the imitation feed/gesture overlay and does not intercept swipes intended for TikTok.
-- Browser E2E was rewritten to verify mobile navigation to the first-party TikTok URL and browser Back to NM7, while retaining the desktop embedded-player regression tests. Latest commit pending: CI must pass after this update.
+- Browser E2E was rewritten to verify mobile navigation to the first-party TikTok URL and browser Back to NM7, while retaining the desktop embedded-player regression tests. Isolated preview deploy, smoke and E2E passed on commit `db776a4d`: https://github.com/cnktvpc/nm7-tv-web/actions/runs/40054850634. The smoke test reports the IPTV API still returns 324 channels.
+- On the same PR commit, the TikTok workflow, Web Browser Validation, TV360 routing regression, LIVE metadata test and remote/HLS E2E passed. The TV360 Production Manifest Smoke failed only because the upstream TV360+13 resolver returned HTTP 404/503 after three retries; this check is unrelated to TikTok UI and was not changed here. The guarded production-deploy workflow was skipped, so production remains untouched.
 - Preview: https://nm7-tv-web-tiktok-preview.phuongnm7-iptv.workers.dev/. PR #34 remains draft; production is untouched.
 
 
